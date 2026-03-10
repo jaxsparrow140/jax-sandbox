@@ -1,55 +1,44 @@
-import sys
 from lru_cache import LRUCache
 
 
-def run_tests() -> bool:
-    all_passed = True
+def test_basic_eviction_and_recency():
+    cache = LRUCache(capacity=2)
 
-    def check(name: str, condition: bool) -> None:
-        nonlocal all_passed
-        status = "PASS" if condition else "FAIL"
-        if not condition:
-            all_passed = False
-        print(f"[{status}] {name}")
+    cache.put("a", 1)
+    cache.put("b", 2)
+    assert cache.get("a") == 1  # a becomes MRU
 
-    # 1. Basic put/get
-    c = LRUCache(2)
-    c.put(1, 10)
-    c.put(2, 20)
-    check("basic put/get", c.get(1) == 10 and c.get(2) == 20)
+    # Cache is full; inserting c should evict LRU (which is b)
+    cache.put("c", 3)
+    assert cache.get("b") is None
+    assert cache.get("c") == 3
+    assert cache.get("a") == 1
 
-    # 2. LRU eviction
-    c = LRUCache(2)
-    c.put(1, 1)
-    c.put(2, 2)
-    c.put(3, 3)  # evicts key 1
-    check("LRU eviction (oldest key gone)", c.get(1) == -1)
-    check("LRU eviction (newer keys remain)", c.get(2) == 2 and c.get(3) == 3)
+    # Access order should now be: a (MRU), c (LRU)
+    assert cache.keys_mru_to_lru() == ["a", "c"]
 
-    # 3. get reorders priority
-    c = LRUCache(2)
-    c.put(1, 1)
-    c.put(2, 2)
-    c.get(1)     # key 1 is now most-recently used
-    c.put(3, 3)  # should evict key 2, not key 1
-    check("get reorders priority (accessed key survives)", c.get(1) == 1)
-    check("get reorders priority (unaccessed key evicted)", c.get(2) == -1)
 
-    # 4. Overwrite existing key
-    c = LRUCache(2)
-    c.put(1, 1)
-    c.put(1, 100)
-    check("overwrite existing key", c.get(1) == 100)
+def test_update_moves_to_front():
+    cache = LRUCache(capacity=2)
+    cache.put(1, "one")
+    cache.put(2, "two")
 
-    # 5. Capacity-1 edge case
-    c = LRUCache(1)
-    c.put(1, 1)
-    c.put(2, 2)  # evicts key 1
-    check("capacity-1 edge case (eviction)", c.get(1) == -1 and c.get(2) == 2)
+    # Update key 1; should become MRU
+    cache.put(1, "ONE")
+    assert cache.get(1) == "ONE"
+    assert cache.keys_mru_to_lru() == [1, 2]
 
-    return all_passed
+
+def test_capacity_zero_is_noop():
+    cache = LRUCache(capacity=0)
+    cache.put("x", 99)
+    assert cache.get("x") is None
+    assert len(cache) == 0
 
 
 if __name__ == "__main__":
-    passed = run_tests()
-    sys.exit(0 if passed else 1)
+    test_basic_eviction_and_recency()
+    test_update_moves_to_front()
+    test_capacity_zero_is_noop()
+
+    print("All tests passed.")

@@ -1,165 +1,121 @@
+"""LRU Cache (Least Recently Used) implementation from scratch.
+
+Requirements:
+- O(1) average time for get(key) and put(key, value)
+- Capacity limit; when full, evict least-recently-used item
+
+Approach:
+- Hash map: key -> node (O(1) access)
+- Doubly-linked list to track recency (O(1) move-to-front / eviction)
+
+Most-recently-used (MRU) is kept at the front (right after head sentinel).
+Least-recently-used (LRU) is kept at the back (right before tail sentinel).
 """
-LRU Cache — from scratch, no functools, no external libs.
 
-Uses a doubly linked list + hash map for O(1) get and put.
-- Doubly linked list tracks access order (most recent at head, least recent at tail).
-- Hash map provides O(1) key → node lookup.
-"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 
-class Node:
-    """Doubly linked list node."""
-
-    __slots__ = ("key", "value", "prev", "next")
-
-    def __init__(self, key: int = 0, value: int = 0):
-        self.key = key
-        self.value = value
-        self.prev: "Node | None" = None
-        self.next: "Node | None" = None
+@dataclass
+class _Node:
+    key: Any
+    value: Any
+    prev: Optional["_Node"] = None
+    next: Optional["_Node"] = None
 
 
 class LRUCache:
+    """An LRU cache with fixed capacity.
+
+    get(key) -> value | None
+        Returns the value and marks key as most-recently-used.
+        Returns None if key is not present.
+
+    put(key, value) -> None
+        Inserts/updates value and marks key as most-recently-used.
+        If capacity is exceeded, evicts the least-recently-used entry.
+    """
+
     def __init__(self, capacity: int):
-        if capacity <= 0:
-            raise ValueError("Capacity must be positive")
+        if capacity < 0:
+            raise ValueError("capacity must be >= 0")
         self.capacity = capacity
-        self.cache: dict[int, Node] = {}
+        self._nodes: Dict[Any, _Node] = {}
 
-        # Sentinel nodes — avoids None checks on every insert/remove.
-        self.head = Node()  # dummy head (most recently used side)
-        self.tail = Node()  # dummy tail (least recently used side)
-        self.head.next = self.tail
-        self.tail.prev = self.head
+        # Sentinel nodes to avoid edge cases on insert/remove.
+        self._head = _Node(key=None, value=None)  # MRU side
+        self._tail = _Node(key=None, value=None)  # LRU side
+        self._head.next = self._tail
+        self._tail.prev = self._head
 
-    # ── internal helpers ──────────────────────────────────────────
+    def __len__(self) -> int:
+        return len(self._nodes)
 
-    def _remove(self, node: Node) -> None:
-        """Unlink a node from the list."""
-        node.prev.next = node.next
-        node.next.prev = node.prev
+    def _remove(self, node: _Node) -> None:
+        """Remove node from the linked list (but not from the dict)."""
+        prev_node = node.prev
+        next_node = node.next
+        if prev_node is None or next_node is None:
+            # Should never happen for nodes currently in the list.
+            raise RuntimeError("attempted to remove a detached node")
+        prev_node.next = next_node
+        next_node.prev = prev_node
+        node.prev = None
+        node.next = None
 
-    def _add_to_front(self, node: Node) -> None:
-        """Insert node right after the dummy head (most recent position)."""
-        node.prev = self.head
-        node.next = self.head.next
-        self.head.next.prev = node
-        self.head.next = node
+    def _add_to_front(self, node: _Node) -> None:
+        """Add node right after head (mark as MRU)."""
+        first = self._head.next
+        if first is None:
+            raise RuntimeError("corrupt list: head.next is None")
+        node.prev = self._head
+        node.next = first
+        self._head.next = node
+        first.prev = node
 
-    # ── public API ────────────────────────────────────────────────
-
-    def get(self, key: int) -> int:
-        """Return value for key, or -1 if not found. Marks key as recently used."""
-        if key not in self.cache:
-            return -1
-        node = self.cache[key]
-        # Move to front (most recently used)
+    def _move_to_front(self, node: _Node) -> None:
         self._remove(node)
         self._add_to_front(node)
+
+    def _evict_lru(self) -> None:
+        """Evict the least-recently-used node (right before tail)."""
+        lru = self._tail.prev
+        if lru is None or lru is self._head:
+            return  # nothing to evict
+        self._remove(lru)
+        self._nodes.pop(lru.key, None)
+
+    def get(self, key: Any) -> Any:
+        node = self._nodes.get(key)
+        if node is None:
+            return None
+        self._move_to_front(node)
         return node.value
 
-    def put(self, key: int, value: int) -> None:
-        """Insert or update key-value pair. Evicts LRU item if at capacity."""
-        if key in self.cache:
-            # Update existing — remove, re-insert at front
-            node = self.cache[key]
+    def put(self, key: Any, value: Any) -> None:
+        if self.capacity == 0:
+            return
+
+        node = self._nodes.get(key)
+        if node is not None:
             node.value = value
-            self._remove(node)
-            self._add_to_front(node)
-        else:
-            if len(self.cache) >= self.capacity:
-                # Evict least recently used (node just before dummy tail)
-                lru = self.tail.prev
-                self._remove(lru)
-                del self.cache[lru.key]
-            node = Node(key, value)
-            self.cache[key] = node
-            self._add_to_front(node)
+            self._move_to_front(node)
+            return
 
-    def __repr__(self) -> str:
-        """Show contents in MRU → LRU order."""
-        items = []
-        cur = self.head.next
-        while cur is not self.tail:
-            items.append(f"{cur.key}:{cur.value}")
+        new_node = _Node(key=key, value=value)
+        self._nodes[key] = new_node
+        self._add_to_front(new_node)
+
+        if len(self._nodes) > self.capacity:
+            self._evict_lru()
+
+    def keys_mru_to_lru(self) -> list[Any]:
+        """Debug helper: current keys ordered from most- to least-recently-used."""
+        out: list[Any] = []
+        cur = self._head.next
+        while cur is not None and cur is not self._tail:
+            out.append(cur.key)
             cur = cur.next
-        return f"LRUCache([{', '.join(items)}], cap={self.capacity})"
-
-
-# ── Tests ─────────────────────────────────────────────────────────
-
-
-def test_basic_operations():
-    """Classic LeetCode 146 example."""
-    cache = LRUCache(2)
-    cache.put(1, 1)
-    cache.put(2, 2)
-    assert cache.get(1) == 1        # hit — 1 becomes most recent
-    cache.put(3, 3)                  # evicts key 2 (LRU)
-    assert cache.get(2) == -1       # miss
-    cache.put(4, 4)                  # evicts key 1 (LRU)
-    assert cache.get(1) == -1       # miss
-    assert cache.get(3) == 3        # hit
-    assert cache.get(4) == 4        # hit
-    print("✓ basic_operations")
-
-
-def test_update_existing_key():
-    """Updating a key should refresh its position, not add a duplicate."""
-    cache = LRUCache(2)
-    cache.put(1, 10)
-    cache.put(2, 20)
-    cache.put(1, 100)               # update key 1 — now most recent
-    cache.put(3, 30)                # should evict key 2 (LRU), not key 1
-    assert cache.get(1) == 100
-    assert cache.get(2) == -1
-    assert cache.get(3) == 30
-    print("✓ update_existing_key")
-
-
-def test_capacity_one():
-    """Edge case: cache that holds exactly one item."""
-    cache = LRUCache(1)
-    cache.put(1, 1)
-    assert cache.get(1) == 1
-    cache.put(2, 2)                  # evicts key 1
-    assert cache.get(1) == -1
-    assert cache.get(2) == 2
-    print("✓ capacity_one")
-
-
-def test_get_promotes_to_mru():
-    """A get() should save a key from eviction."""
-    cache = LRUCache(3)
-    cache.put(1, 1)
-    cache.put(2, 2)
-    cache.put(3, 3)
-    cache.get(1)                     # promote key 1 → MRU
-    cache.put(4, 4)                  # evicts key 2 (now the LRU)
-    assert cache.get(2) == -1
-    assert cache.get(1) == 1
-    assert cache.get(3) == 3
-    assert cache.get(4) == 4
-    print("✓ get_promotes_to_mru")
-
-
-def test_eviction_order():
-    """Verify strict LRU eviction across a longer sequence."""
-    cache = LRUCache(3)
-    for i in range(1, 7):            # put 1..6 into cap-3 cache
-        cache.put(i, i * 10)
-    # Only 4, 5, 6 should survive
-    for i in range(1, 4):
-        assert cache.get(i) == -1, f"key {i} should have been evicted"
-    for i in range(4, 7):
-        assert cache.get(i) == i * 10, f"key {i} should still be present"
-    print("✓ eviction_order")
-
-
-if __name__ == "__main__":
-    test_basic_operations()
-    test_update_existing_key()
-    test_capacity_one()
-    test_get_promotes_to_mru()
-    test_eviction_order()
-    print("\nAll tests passed.")
+        return out
