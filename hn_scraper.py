@@ -2,7 +2,13 @@
 """Scrape the top 10 article titles from Hacker News."""
 
 import sys
-import requests
+import warnings
+
+# Suppress urllib3 NotOpenSSLWarning on macOS system Python — must come before import
+warnings.filterwarnings("ignore", message=".*OpenSSL.*")
+
+import requests  # noqa: E402
+from concurrent.futures import ThreadPoolExecutor, as_completed  # noqa: E402
 
 HN_TOP_STORIES = "https://hacker-news.firebaseio.com/v0/topstories.json"
 HN_ITEM = "https://hacker-news.firebaseio.com/v0/item/{}.json"
@@ -10,19 +16,30 @@ NUM_STORIES = 10
 TIMEOUT = 10  # seconds
 
 
+def fetch_item(sid: int) -> tuple[int, str]:
+    """Fetch a single HN item and return (story_id, title)."""
+    resp = requests.get(HN_ITEM.format(sid), timeout=TIMEOUT)
+    resp.raise_for_status()
+    data = resp.json()
+    return sid, data.get("title", "(no title)")
+
+
 def fetch_top_titles(n: int = NUM_STORIES) -> list[str]:
-    """Return the titles of the top *n* Hacker News stories."""
+    """Return the titles of the top *n* HN stories, fetched concurrently."""
     resp = requests.get(HN_TOP_STORIES, timeout=TIMEOUT)
     resp.raise_for_status()
     story_ids = resp.json()[:n]
 
-    titles: list[str] = []
-    for sid in story_ids:
-        item = requests.get(HN_ITEM.format(sid), timeout=TIMEOUT)
-        item.raise_for_status()
-        data = item.json()
-        titles.append(data.get("title", "(no title)"))
-    return titles
+    # Fetch all items concurrently — much faster than serial requests
+    results: dict[int, str] = {}
+    with ThreadPoolExecutor(max_workers=n) as pool:
+        futures = {pool.submit(fetch_item, sid): sid for sid in story_ids}
+        for future in as_completed(futures):
+            sid, title = future.result()  # propagates exceptions
+            results[sid] = title
+
+    # Preserve original ranking order
+    return [results[sid] for sid in story_ids]
 
 
 def main() -> None:
