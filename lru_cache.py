@@ -29,9 +29,9 @@ class _Node:
 class LRUCache:
     """An LRU cache with fixed capacity.
 
-    get(key) -> value | None
+    get(key) -> value | -1
         Returns the value and marks key as most-recently-used.
-        Returns None if key is not present.
+        Returns -1 if key is not present.
 
     put(key, value) -> None
         Inserts/updates value and marks key as most-recently-used.
@@ -90,7 +90,7 @@ class LRUCache:
     def get(self, key: Any) -> Any:
         node = self._nodes.get(key)
         if node is None:
-            return None
+            return -1
         self._move_to_front(node)
         return node.value
 

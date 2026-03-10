@@ -10,7 +10,7 @@ def test_basic_eviction_and_recency():
 
     # Cache is full; inserting c should evict LRU (which is b)
     cache.put("c", 3)
-    assert cache.get("b") is None
+    assert cache.get("b") == -1
     assert cache.get("c") == 3
     assert cache.get("a") == 1
 
@@ -32,7 +32,7 @@ def test_update_moves_to_front():
 def test_capacity_zero_is_noop():
     cache = LRUCache(capacity=0)
     cache.put("x", 99)
-    assert cache.get("x") is None
+    assert cache.get("x") == -1
     assert len(cache) == 0
 
 
