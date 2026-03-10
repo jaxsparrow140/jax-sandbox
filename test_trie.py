@@ -1,13 +1,9 @@
-"""
-Tests for trie.py
-"""
-import pytest
+"""Tests for trie.py (standard-library only)."""
+
+import unittest
+
 from trie import Trie
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def make_trie(*words: str) -> Trie:
     t = Trie()
@@ -16,160 +12,140 @@ def make_trie(*words: str) -> Trie:
     return t
 
 
-# ---------------------------------------------------------------------------
-# insert / search
-# ---------------------------------------------------------------------------
-
-class TestInsertSearch:
+class TestInsertSearch(unittest.TestCase):
     def test_search_inserted_word(self):
         t = make_trie("apple")
-        assert t.search("apple") is True
+        self.assertTrue(t.search("apple"))
 
     def test_search_missing_word(self):
         t = make_trie("apple")
-        assert t.search("app") is False
+        self.assertFalse(t.search("app"))
 
     def test_search_prefix_only(self):
         t = make_trie("apple")
-        assert t.search("appl") is False
+        self.assertFalse(t.search("appl"))
 
     def test_search_empty_string(self):
         t = Trie()
-        assert t.search("") is False
+        self.assertFalse(t.search(""))
         t.insert("")
-        assert t.search("") is True
+        self.assertTrue(t.search(""))
 
     def test_duplicate_insert(self):
         t = Trie()
         t.insert("cat")
         t.insert("cat")
-        assert t.search("cat") is True
+        self.assertTrue(t.search("cat"))
 
     def test_multiple_words(self):
         words = ["bat", "ball", "batman", "band", "can"]
         t = make_trie(*words)
         for w in words:
-            assert t.search(w) is True
-        assert t.search("ba") is False
-        assert t.search("bats") is False
+            self.assertTrue(t.search(w))
+        self.assertFalse(t.search("ba"))
+        self.assertFalse(t.search("bats"))
 
 
-# ---------------------------------------------------------------------------
-# starts_with
-# ---------------------------------------------------------------------------
-
-class TestStartsWith:
+class TestStartsWith(unittest.TestCase):
     def test_prefix_exists(self):
         t = make_trie("apple", "app", "application")
-        assert t.starts_with("app") is True
-        assert t.starts_with("appl") is True
-        assert t.starts_with("a") is True
+        self.assertTrue(t.starts_with("app"))
+        self.assertTrue(t.starts_with("appl"))
+        self.assertTrue(t.starts_with("a"))
 
     def test_prefix_not_exists(self):
         t = make_trie("apple")
-        assert t.starts_with("b") is False
-        assert t.starts_with("apples") is False
+        self.assertFalse(t.starts_with("b"))
+        self.assertFalse(t.starts_with("apples"))
 
     def test_full_word_is_prefix(self):
         t = make_trie("apple")
-        assert t.starts_with("apple") is True  # exact word counts
+        self.assertTrue(t.starts_with("apple"))
 
     def test_empty_prefix(self):
         t = make_trie("anything")
-        assert t.starts_with("") is True  # root always exists
+        self.assertTrue(t.starts_with(""))
 
     def test_empty_trie(self):
         t = Trie()
-        assert t.starts_with("a") is False
+        self.assertFalse(t.starts_with("a"))
 
 
-# ---------------------------------------------------------------------------
-# delete
-# ---------------------------------------------------------------------------
-
-class TestDelete:
+class TestDelete(unittest.TestCase):
     def test_delete_existing_word(self):
         t = make_trie("apple")
-        assert t.delete("apple") is True
-        assert t.search("apple") is False
+        self.assertTrue(t.delete("apple"))
+        self.assertFalse(t.search("apple"))
 
     def test_delete_returns_false_for_missing_word(self):
         t = make_trie("apple")
-        assert t.delete("app") is False
-        assert t.delete("banana") is False
+        self.assertFalse(t.delete("app"))
+        self.assertFalse(t.delete("banana"))
 
     def test_delete_does_not_affect_prefix(self):
         t = make_trie("apple", "app")
-        t.delete("apple")
-        assert t.search("app") is True   # prefix-word still present
-        assert t.search("apple") is False
+        self.assertTrue(t.delete("apple"))
+        self.assertTrue(t.search("app"))
+        self.assertFalse(t.search("apple"))
 
     def test_delete_does_not_affect_extension(self):
         t = make_trie("app", "apple")
-        t.delete("app")
-        assert t.search("app") is False
-        assert t.search("apple") is True  # longer word untouched
+        self.assertTrue(t.delete("app"))
+        self.assertFalse(t.search("app"))
+        self.assertTrue(t.search("apple"))
 
     def test_delete_cleans_up_orphaned_nodes(self):
-        """After deleting a unique word, its nodes should be pruned."""
         t = make_trie("xyz")
-        assert "x" in t.root.children
-        t.delete("xyz")
-        assert "x" not in t.root.children  # node was cleaned up
+        self.assertIn("x", t.root.children)
+        self.assertTrue(t.delete("xyz"))
+        self.assertNotIn("x", t.root.children)
 
     def test_delete_keeps_shared_prefix_nodes(self):
-        """Shared prefix nodes must NOT be removed when only one word is deleted."""
         t = make_trie("bat", "ball")
-        t.delete("bat")
-        # 'b' and 'a' are shared — they must still exist for 'ball'
-        assert t.starts_with("ba") is True
-        assert t.search("ball") is True
-        assert t.search("bat") is False
+        self.assertTrue(t.delete("bat"))
+        self.assertTrue(t.starts_with("ba"))
+        self.assertTrue(t.search("ball"))
+        self.assertFalse(t.search("bat"))
 
     def test_delete_empty_string(self):
         t = Trie()
         t.insert("")
-        assert t.delete("") is True
-        assert t.search("") is False
+        self.assertTrue(t.delete(""))
+        self.assertFalse(t.search(""))
 
     def test_delete_all_words(self):
         words = ["can", "cat", "car", "card"]
         t = make_trie(*words)
         for w in words:
-            assert t.delete(w) is True
+            self.assertTrue(t.delete(w))
         for w in words:
-            assert t.search(w) is False
-        # Trie should be essentially empty
-        assert t.root.children == {}
+            self.assertFalse(t.search(w))
+        self.assertEqual(t.root.children, {})
 
     def test_double_delete(self):
         t = make_trie("hello")
-        assert t.delete("hello") is True
-        assert t.delete("hello") is False  # already gone
+        self.assertTrue(t.delete("hello"))
+        self.assertFalse(t.delete("hello"))
 
     def test_delete_one_of_many(self):
         words = ["test", "testing", "tester", "tested"]
         t = make_trie(*words)
-        t.delete("testing")
-        assert t.search("testing") is False
+        self.assertTrue(t.delete("testing"))
+        self.assertFalse(t.search("testing"))
         for w in ["test", "tester", "tested"]:
-            assert t.search(w) is True
+            self.assertTrue(t.search(w))
 
 
-# ---------------------------------------------------------------------------
-# Repr / collect sanity
-# ---------------------------------------------------------------------------
-
-class TestRepr:
+class TestRepr(unittest.TestCase):
     def test_repr_lists_all_words(self):
         words = ["fig", "fire", "fit"]
         t = make_trie(*words)
-        assert repr(t) == f"Trie({sorted(words)})"
+        self.assertEqual(repr(t), f"Trie({sorted(words)})")
 
     def test_repr_empty(self):
         t = Trie()
-        assert repr(t) == "Trie([])"
+        self.assertEqual(repr(t), "Trie([])")
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    unittest.main()

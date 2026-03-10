@@ -43,6 +43,17 @@ class Trie:
         """
         return self._delete(self.root, word, 0)
 
+    # ── convenience ──────────────────────────────────────────────────
+
+    def words(self) -> list[str]:
+        """Return all stored words (order not guaranteed)."""
+        out: list[str] = []
+        self._collect(self.root, "", out)
+        return out
+
+    def __repr__(self) -> str:
+        return f"Trie({sorted(self.words())})"
+
     # ── internals ────────────────────────────────────────────────────
 
     def _find(self, prefix: str) -> Optional[TrieNode]:
@@ -59,18 +70,18 @@ class Trie:
 
         Post-order traversal: after the recursive call returns, each frame
         checks whether its child node is now a childless non-endpoint and
-        prunes it if so.  Returns True when the word was actually removed.
+        prunes it if so. Returns True when the word was actually removed.
         """
         if depth == len(word):
             if not node.is_end:
-                return False          # word not in trie
+                return False  # word not in trie
             node.is_end = False
             return True
 
         ch = word[depth]
         child = node.children.get(ch)
         if child is None:
-            return False              # word not in trie
+            return False  # word not in trie
 
         found = self._delete(child, word, depth + 1)
 
@@ -79,6 +90,12 @@ class Trie:
             del node.children[ch]
 
         return found
+
+    def _collect(self, node: TrieNode, prefix: str, out: list[str]) -> None:
+        if node.is_end:
+            out.append(prefix)
+        for ch, child in node.children.items():
+            self._collect(child, prefix + ch, out)
 
 
 # ── quick smoke test ─────────────────────────────────────────────────
