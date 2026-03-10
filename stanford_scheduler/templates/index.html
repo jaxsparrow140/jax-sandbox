@@ -1,265 +1,721 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Stanford Course Scheduler</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--cardinal:#8C1515;--cardinal-dark:#6b1010;--dark:#1a1a2e;--darker:#16162a;--gray:#f4f4f8;--text:#333;--light-text:#888}
+:root{--cardinal:#8C1515;--cardinal-dark:#6b1010;--dark:#1a1a2e;--darker:#16162a;--gray:#f4f4f8;--text:#333;--light-text:#777;--border:#e5e5ee}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f0f5;color:var(--text);display:flex;min-height:100vh}
-.main{flex:1;padding:24px 32px;overflow-y:auto;max-width:calc(100% - 340px)}
-.sidebar{width:340px;background:var(--dark);color:#fff;padding:24px;display:flex;flex-direction:column;position:fixed;right:0;top:0;bottom:0;overflow-y:auto}
-.logo{font-size:1.6rem;font-weight:700;color:var(--cardinal);margin-bottom:4px}
-.subtitle{color:var(--light-text);font-size:.9rem;margin-bottom:28px}
-.search-box{position:relative;margin-bottom:28px}
-.search-box input{width:100%;padding:16px 20px;font-size:1.05rem;border:2px solid #ddd;border-radius:12px;outline:none;transition:border .2s}
-.search-box input:focus{border-color:var(--cardinal)}
-.search-box .hint{font-size:.8rem;color:var(--light-text);margin-top:6px;padding-left:4px}
-.tabs{display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid #ddd}
-.tab{padding:10px 20px;cursor:pointer;font-weight:600;color:var(--light-text);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s}
+.main{flex:1;padding:24px 32px;overflow-y:auto;max-width:calc(100% - 360px)}
+.sidebar{width:360px;background:var(--dark);color:#fff;padding:22px;display:flex;flex-direction:column;position:fixed;right:0;top:0;bottom:0;overflow-y:auto}
+.logo{font-size:1.6rem;font-weight:800;color:var(--cardinal);margin-bottom:4px}
+.subtitle{color:#9aa0a6;font-size:.95rem;margin-bottom:18px;line-height:1.3}
+
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0 18px}
+.select{display:flex;gap:8px;align-items:center;background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+.select label{font-size:.85rem;color:var(--light-text)}
+.select select{border:none;outline:none;background:transparent;font-weight:700;color:#111}
+
+.assistant{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 14px 10px;margin-bottom:18px;box-shadow:0 2px 10px rgba(0,0,0,.05)}
+.assistant-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.assistant-title h3{font-size:1.05rem}
+.badge{font-size:.75rem;color:#fff;background:var(--cardinal);padding:3px 9px;border-radius:999px;font-weight:700}
+.chat{max-height:220px;overflow:auto;padding:6px 2px 10px;display:flex;flex-direction:column;gap:10px}
+.msg{display:flex;gap:10px}
+.msg .role{width:70px;font-size:.78rem;color:var(--light-text);padding-top:2px}
+.msg .bubble{flex:1;background:var(--gray);border-radius:12px;padding:10px 12px;font-size:.92rem;line-height:1.35}
+.msg.user .bubble{background:#fff;border:1px solid var(--border)}
+.msg.assistant .bubble{background:rgba(140,21,21,.08);border:1px solid rgba(140,21,21,.18)}
+
+.command{display:flex;gap:10px;margin-top:10px}
+.command textarea{flex:1;resize:none;height:46px;padding:11px 12px;border:1px solid var(--border);border-radius:12px;font-size:.95rem;outline:none}
+.command textarea:focus{border-color:var(--cardinal)}
+.btn{background:var(--cardinal);color:#fff;border:none;padding:10px 14px;border-radius:12px;cursor:pointer;font-weight:800}
+.btn:hover{background:var(--cardinal-dark)}
+.btn.secondary{background:#22273a}
+.btn.secondary:hover{background:#1c2030}
+.hint{font-size:.82rem;color:var(--light-text);margin-top:8px;line-height:1.35}
+
+.tabs{display:flex;gap:0;margin-top:18px;margin-bottom:14px;border-bottom:2px solid var(--border)}
+.tab{padding:10px 18px;cursor:pointer;font-weight:800;color:var(--light-text);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s}
 .tab.active{color:var(--cardinal);border-bottom-color:var(--cardinal)}
 .tab:hover{color:var(--cardinal-dark)}
-.spinner{display:none;text-align:center;padding:40px}
+
+.spinner{display:none;text-align:center;padding:30px}
 .spinner.show{display:block}
-.spinner::after{content:'';display:inline-block;width:36px;height:36px;border:4px solid #ddd;border-top-color:var(--cardinal);border-radius:50%;animation:spin .7s linear infinite}
+.spinner::after{content:'';display:inline-block;width:34px;height:34px;border:4px solid #ddd;border-top-color:var(--cardinal);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.results{display:grid;gap:16px}
-.card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:box-shadow .2s}
-.card:hover{box-shadow:0 4px 16px rgba(0,0,0,.1)}
-.card-code{font-weight:700;font-size:1.05rem;color:var(--cardinal)}
-.card-title{font-weight:700;font-size:1.05rem;margin-left:4px}
-.card-meta{font-size:.85rem;color:var(--light-text);margin:6px 0 8px}
-.card-desc{font-size:.9rem;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer;transition:all .2s}
+
+.results{display:grid;gap:14px}
+.card{background:#fff;border-radius:14px;padding:18px;border:1px solid var(--border);box-shadow:0 2px 10px rgba(0,0,0,.04)}
+.card-top{display:flex;justify-content:space-between;gap:14px}
+.card-code{font-weight:900;font-size:1.05rem;color:var(--cardinal)}
+.card-title{font-weight:900;font-size:1.05rem;margin-left:4px}
+.card-meta{font-size:.84rem;color:var(--light-text);margin:6px 0 10px}
+.card-desc{font-size:.9rem;line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
 .card-desc.expanded{-webkit-line-clamp:unset}
-.card-category{display:inline-block;background:var(--gray);color:var(--cardinal);font-size:.75rem;font-weight:600;padding:3px 10px;border-radius:20px;margin-bottom:8px}
-.card-why{font-size:.85rem;color:#555;font-style:italic;margin:8px 0;line-height:1.4}
-.btn-add{background:var(--cardinal);color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:600;margin-top:10px;transition:background .2s}
-.btn-add:hover{background:var(--cardinal-dark)}
-.btn-add.added{background:#555;cursor:default}
-.empty-msg{text-align:center;color:var(--light-text);padding:40px 0;font-size:.95rem}
+
+.smalllink{font-size:.85rem;color:var(--cardinal);text-decoration:none;font-weight:800}
+.smalllink:hover{text-decoration:underline}
+
+.section-list{margin-top:12px;border-top:1px dashed var(--border);padding-top:12px;display:flex;flex-direction:column;gap:10px}
+.section{display:flex;justify-content:space-between;gap:12px;background:var(--gray);border-radius:12px;padding:10px 12px;border:1px solid rgba(0,0,0,.03)}
+.section .left{flex:1}
+.section .line1{font-weight:900;font-size:.9rem}
+.section .line2{font-size:.84rem;color:#555;margin-top:2px}
+.section .line3{font-size:.82rem;color:var(--light-text);margin-top:2px}
+.section button{align-self:center}
+
+.tag{display:inline-block;background:var(--gray);color:var(--cardinal);font-size:.72rem;font-weight:900;padding:3px 10px;border-radius:999px;margin-bottom:8px}
+.why{font-size:.86rem;color:#444;font-style:italic;margin:8px 0 10px;line-height:1.35}
+.empty-msg{text-align:center;color:var(--light-text);padding:32px 0;font-size:.95rem}
+
 /* Sidebar */
-.sidebar h2{font-size:1.2rem;margin-bottom:16px;display:flex;align-items:center;gap:8px}
-.schedule-list{flex:1;overflow-y:auto}
-.schedule-item{background:var(--darker);border-radius:8px;padding:12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
-.schedule-item .info{flex:1}
-.schedule-item .info .name{font-size:.9rem;font-weight:600}
-.schedule-item .info .units{font-size:.8rem;color:#999}
-.btn-remove{background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:1.1rem;padding:4px 8px}
-.btn-remove:hover{color:#ff4444}
-.sidebar-footer{border-top:1px solid rgba(255,255,255,.1);padding-top:16px;margin-top:16px}
-.total-units{font-size:.95rem;margin-bottom:12px}
-.total-units span{font-weight:700;color:var(--cardinal);font-size:1.1rem}
-.btn-export{width:100%;padding:12px;background:var(--cardinal);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;transition:background .2s}
+.sidebar h2{font-size:1.15rem;margin-bottom:10px}
+.schedule-list{flex:1;overflow:auto;margin-top:8px}
+.schedule-item{background:var(--darker);border-radius:12px;padding:12px;margin-bottom:10px;border:1px solid rgba(255,255,255,.08)}
+.schedule-item .name{font-size:.92rem;font-weight:900}
+.schedule-item .meta{font-size:.82rem;color:#b4b6bd;margin-top:4px;line-height:1.25}
+.schedule-item .meta b{color:#fff}
+.schedule-item .actions{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.btn-remove{background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:.95rem;font-weight:900;padding:6px 8px;border-radius:10px}
+.btn-remove:hover{background:rgba(255,107,107,.12)}
+
+.sidebar-footer{border-top:1px solid rgba(255,255,255,.12);padding-top:14px;margin-top:12px}
+.total-units{font-size:.95rem;margin-bottom:10px}
+.total-units span{font-weight:900;color:var(--cardinal);font-size:1.15rem}
+.btn-export{width:100%;padding:12px;background:var(--cardinal);color:#fff;border:none;border-radius:12px;font-size:.92rem;font-weight:900;cursor:pointer}
 .btn-export:hover{background:var(--cardinal-dark)}
 .btn-export:disabled{background:#555;cursor:default}
-/* Toast */
-.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;flex-direction:column;gap:8px;align-items:center}
-.toast{background:#333;color:#fff;padding:10px 20px;border-radius:8px;font-size:.9rem;animation:fadeInUp .3s,fadeOut .3s 2s forwards;pointer-events:none}
+
+.toast-container{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{background:#111827;color:#fff;padding:10px 16px;border-radius:12px;font-size:.9rem;animation:fadeInUp .25s,fadeOut .25s 2.2s forwards;pointer-events:none;max-width:92vw}
 @keyframes fadeInUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes fadeOut{to{opacity:0;transform:translateY(-10px)}}
-/* Mobile */
-@media(max-width:768px){
+
+@media(max-width:920px){
+  body{flex-direction:column}
   .main{max-width:100%;padding:16px}
   .sidebar{position:relative;width:100%}
-  body{flex-direction:column}
 }
 </style>
 </head>
 <body>
-<div class="main">
-  <div class="logo">Stanford Course Scheduler</div>
-  <p class="subtitle">Search Stanford courses with natural language and build your schedule</p>
-  <div class="search-box">
-    <input type="text" id="searchInput" placeholder="Try: machine learning for business people, generative AI courses..." autofocus>
-    <div class="hint">Press Enter to search Stanford Explore Courses</div>
+  <div class="main">
+    <div class="logo">Stanford Course Scheduler</div>
+    <p class="subtitle">
+      Simple planning app built on Stanford’s course registry (ExploreCourses XML). Search in natural language, add specific sections, and export to .ics.
+    </p>
+
+    <div class="controls">
+      <div class="select"><label for="yearSel">Academic year</label><select id="yearSel"></select></div>
+      <div class="select"><label for="qSel">Quarter</label><select id="qSel"></select></div>
+      <button class="btn secondary" id="clearBtn" title="Clear search + recommendations">Clear</button>
+    </div>
+
+    <div class="assistant">
+      <div class="assistant-title">
+        <h3>Natural language interface</h3>
+        <span class="badge">GSB + AI</span>
+      </div>
+      <div class="chat" id="chat"></div>
+      <div class="command">
+        <textarea id="cmd" placeholder="Try: recommend AI courses • find foundation models • add CS 229 • add CS 229 section 01"></textarea>
+        <button class="btn" id="runBtn">Run</button>
+      </div>
+      <div class="hint">
+        You can type full sentences. This is a lightweight command interpreter (no external AI keys required).\n
+        Examples: “find generative AI and strategy”, “recommend courses for next quarter”, “add CS 229”, “remove CS 229”.
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="search" onclick="switchTab('search')">Search Results</div>
+      <div class="tab" data-tab="recs" onclick="switchTab('recs')">AI Recommendations</div>
+    </div>
+
+    <div class="spinner" id="spinner"></div>
+    <div class="results" id="searchResults"></div>
+    <div class="results" id="recsResults" style="display:none"></div>
   </div>
-  <div class="tabs">
-    <div class="tab active" data-tab="search" onclick="switchTab('search')">Search Results</div>
-    <div class="tab" data-tab="recs" onclick="switchTab('recs')">AI Recommendations</div>
+
+  <div class="sidebar">
+    <h2>My Schedule</h2>
+    <div class="schedule-list" id="scheduleList">
+      <div class="empty-msg" id="emptyMsg" style="color:#b4b6bd">No sections added yet</div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="total-units">Total Units (min): <span id="totalUnits">0</span></div>
+      <button class="btn-export" id="exportBtn" onclick="exportICS()" disabled>Download .ics</button>
+      <div style="margin-top:10px;color:#b4b6bd;font-size:.78rem;line-height:1.3">
+        Note: ExploreCourses shows scheduled meeting times for many (not all) sections. Always confirm in Axess before enrolling.
+      </div>
+    </div>
   </div>
-  <div class="spinner" id="spinner"></div>
-  <div class="results" id="searchResults"></div>
-  <div class="results" id="recsResults" style="display:none"></div>
-</div>
-<div class="sidebar">
-  <h2>My Schedule</h2>
-  <div class="schedule-list" id="scheduleList">
-    <div class="empty-msg" id="emptyMsg">No courses added yet</div>
-  </div>
-  <div class="sidebar-footer">
-    <div class="total-units">Total Units: <span id="totalUnits">0</span></div>
-    <button class="btn-export" id="exportBtn" onclick="exportICS()" disabled>Download .ics</button>
-  </div>
-</div>
-<div class="toast-container" id="toasts"></div>
+
+  <div class="toast-container" id="toasts"></div>
 
 <script>
-const schedule = [];
-const searchInput = document.getElementById('searchInput');
+const chatEl = document.getElementById('chat');
+const cmdEl = document.getElementById('cmd');
+const runBtn = document.getElementById('runBtn');
+const spinner = document.getElementById('spinner');
 const searchResults = document.getElementById('searchResults');
 const recsResults = document.getElementById('recsResults');
-const spinner = document.getElementById('spinner');
 const scheduleList = document.getElementById('scheduleList');
 const emptyMsg = document.getElementById('emptyMsg');
 const totalUnitsEl = document.getElementById('totalUnits');
 const exportBtn = document.getElementById('exportBtn');
+const yearSel = document.getElementById('yearSel');
+const qSel = document.getElementById('qSel');
+const clearBtn = document.getElementById('clearBtn');
+
+let academicYear = null;
+let quarter = null;
+
+// Each entry is a *section*.
+let schedule = [];
 
 function toast(msg) {
   const t = document.createElement('div');
   t.className = 'toast';
   t.textContent = msg;
   document.getElementById('toasts').appendChild(t);
-  setTimeout(() => t.remove(), 2500);
+  setTimeout(() => t.remove(), 2600);
+}
+
+function addMsg(role, text) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.innerHTML = `<div class="role">${role === 'user' ? 'You' : 'Assistant'}</div><div class="bubble"></div>`;
+  div.querySelector('.bubble').textContent = text;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
 }
 
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   searchResults.style.display = tab === 'search' ? 'grid' : 'none';
   recsResults.style.display = tab === 'recs' ? 'grid' : 'none';
-  if (tab === 'recs' && recsResults.children.length === 0) loadRecs();
 }
 
-function isInSchedule(code) {
-  return schedule.some(c => c.code === code);
+function setLoading(isLoading) {
+  spinner.classList.toggle('show', !!isLoading);
 }
 
-function makeCard(course, isRec) {
-  const div = document.createElement('div');
-  div.className = 'card';
-  const added = isInSchedule(course.code);
-  div.innerHTML = `
-    ${isRec ? '<div class="card-category">' + course.category + '</div>' : ''}
-    <div><span class="card-code">${course.code}</span><span class="card-title"> — ${course.title}</span></div>
-    <div class="card-meta">${course.units} units · ${course.term}</div>
-    ${isRec ? '<div class="card-why">' + course.why_gsb + '</div>' : ''}
-    <div class="card-desc" onclick="this.classList.toggle('expanded')">${course.description || 'No description available.'}</div>
-    <button class="btn-add${added ? ' added' : ''}" onclick="addCourse(this, ${JSON.stringify(course).replace(/"/g, '&quot;')})">${added ? 'Added ✓' : '+ Add to Schedule'}</button>
-  `;
-  return div;
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem('stan_sched_state');
+    if (!raw) return;
+    const st = JSON.parse(raw);
+    schedule = Array.isArray(st.schedule) ? st.schedule : [];
+    academicYear = st.academicYear || academicYear;
+    quarter = st.quarter || quarter;
+  } catch (e) {}
 }
 
-function addCourse(btn, course) {
-  if (isInSchedule(course.code)) return;
-  schedule.push(course);
-  btn.classList.add('added');
-  btn.textContent = 'Added ✓';
-  // Update all cards with same code
-  document.querySelectorAll('.btn-add').forEach(b => {
-    try {
-      const bCourse = JSON.parse(b.getAttribute('onclick').match(/addCourse\(this, (.+)\)$/)?.[1]?.replace(/&quot;/g, '"') || '{}');
-      if (bCourse.code === course.code && b !== btn) {
-        b.classList.add('added');
-        b.textContent = 'Added ✓';
-      }
-    } catch(e) {}
-  });
-  renderSchedule();
-  toast(`Added ${course.code} to schedule`);
+function saveLocal() {
+  try {
+    localStorage.setItem('stan_sched_state', JSON.stringify({ schedule, academicYear, quarter }));
+  } catch (e) {}
 }
 
-function removeCourse(code) {
-  const idx = schedule.findIndex(c => c.code === code);
-  if (idx > -1) {
-    const removed = schedule.splice(idx, 1)[0];
-    renderSchedule();
-    // Reset add buttons
-    document.querySelectorAll('.btn-add.added').forEach(b => {
-      try {
-        const bCourse = JSON.parse(b.getAttribute('onclick').match(/addCourse\(this, (.+)\)$/)?.[1]?.replace(/&quot;/g, '"') || '{}');
-        if (bCourse.code === code) {
-          b.classList.remove('added');
-          b.textContent = '+ Add to Schedule';
-        }
-      } catch(e) {}
-    });
-    toast(`Removed ${removed.code} from schedule`);
-  }
+function normalizeUnits(units) {
+  // Return the minimum units as a number.
+  const s = (units || '').toString().trim();
+  const m = s.match(/(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?/);
+  if (!m) return 0;
+  return parseFloat(m[1]) || 0;
+}
+
+function sectionKey(sec) {
+  return [sec.term, sec.courseCode, sec.component, sec.sectionNumber, sec.classId].filter(Boolean).join('|');
+}
+
+function isInSchedule(sec) {
+  const key = sectionKey(sec);
+  return schedule.some(s => sectionKey(s) === key);
+}
+
+function meetingSummary(schedules) {
+  if (!schedules || !schedules.length) return 'Meeting time: TBA';
+  // Pick the first schedule line for summary.
+  const sc = schedules[0];
+  const days = (sc.days || []).join('/');
+  const time = (sc.startTime && sc.endTime) ? `${sc.startTime.replace(':00','')}–${sc.endTime.replace(':00','')}` : 'Time TBA';
+  const loc = sc.location ? ` @ ${sc.location}` : '';
+  return `${days} ${time}${loc}`.trim();
 }
 
 function renderSchedule() {
   emptyMsg.style.display = schedule.length ? 'none' : 'block';
-  const items = scheduleList.querySelectorAll('.schedule-item');
-  items.forEach(i => i.remove());
-  schedule.forEach(c => {
+  scheduleList.querySelectorAll('.schedule-item').forEach(n => n.remove());
+
+  schedule.forEach((sec, idx) => {
     const div = document.createElement('div');
     div.className = 'schedule-item';
     div.innerHTML = `
-      <div class="info"><div class="name">${c.code} — ${c.title}</div><div class="units">${c.units} units</div></div>
-      <button class="btn-remove" onclick="removeCourse('${c.code}')">&times;</button>
+      <div class="name">${sec.courseCode} — ${sec.title}</div>
+      <div class="meta"><b>${sec.term}</b> · ${sec.component} ${sec.sectionNumber || ''} · ${meetingSummary(sec.schedules)}</div>
+      <div class="actions">
+        <div style="color:#b4b6bd;font-size:.8rem">Units: ${sec.units || 'TBD'}</div>
+        <button class="btn-remove" onclick="removeSchedule(${idx})">Remove</button>
+      </div>
     `;
     scheduleList.insertBefore(div, emptyMsg);
   });
-  const total = schedule.reduce((s, c) => {
-    const n = parseFloat(c.units) || 0;
-    return s + n;
-  }, 0);
-  totalUnitsEl.textContent = total;
+
+  const total = schedule.reduce((sum, s) => sum + normalizeUnits(s.units), 0);
+  totalUnitsEl.textContent = total.toFixed(total % 1 === 0 ? 0 : 1);
   exportBtn.disabled = schedule.length === 0;
+
+  saveLocal();
+}
+
+function removeSchedule(idx) {
+  const removed = schedule.splice(idx, 1)[0];
+  renderSchedule();
+  toast(`Removed ${removed.courseCode} ${removed.component} ${removed.sectionNumber || ''}`);
+}
+
+function makeSectionRow(course, sec) {
+  const div = document.createElement('div');
+  div.className = 'section';
+
+  const daysTime = sec.schedules && sec.schedules.length ? meetingSummary(sec.schedules) : 'Meeting time: TBA';
+  const status = sec.enrollStatus ? ` · ${sec.enrollStatus}` : '';
+
+  const payload = {
+    courseCode: course.code,
+    title: course.title,
+    units: sec.units || course.units,
+    term: sec.term,
+    classId: sec.classId,
+    component: sec.component,
+    sectionNumber: sec.sectionNumber,
+    schedules: sec.schedules || [],
+  };
+
+  const added = isInSchedule(payload);
+
+  div.innerHTML = `
+    <div class="left">
+      <div class="line1">${sec.component} ${sec.sectionNumber || ''}<span style="color:#6b7280;font-weight:800">${status}</span></div>
+      <div class="line2">${daysTime}</div>
+      <div class="line3">Class ID: ${sec.classId || '—'} · Units: ${payload.units || 'TBD'}</div>
+    </div>
+  `;
+
+  const btn = document.createElement('button');
+  btn.className = 'btn';
+  btn.style.padding = '8px 12px';
+  btn.style.borderRadius = '12px';
+  btn.textContent = added ? 'Added ✓' : '+ Add';
+  if (added) {
+    btn.disabled = true;
+    btn.style.background = '#555';
+    btn.style.cursor = 'default';
+  } else {
+    btn.onclick = () => {
+      schedule.push(payload);
+      renderSchedule();
+      btn.textContent = 'Added ✓';
+      btn.disabled = true;
+      btn.style.background = '#555';
+      toast(`Added ${payload.courseCode} ${payload.component} ${payload.sectionNumber || ''}`);
+    };
+  }
+
+  div.appendChild(btn);
+  return div;
+}
+
+function makeCourseCard(course) {
+  const div = document.createElement('div');
+  div.className = 'card';
+
+  const terms = (course.terms && course.terms.length) ? course.terms.map(t => t.split(' ').slice(-1)[0]).join(', ') : '—';
+  const offered = course.sections && course.sections.length;
+
+  div.innerHTML = `
+    <div class="card-top">
+      <div>
+        <div><span class="card-code">${course.code}</span><span class="card-title"> — ${course.title || ''}</span></div>
+        <div class="card-meta">Units: ${course.units || 'TBD'} · Offered: ${terms}</div>
+      </div>
+    </div>
+    <div class="card-desc" title="Click to expand">${course.description || 'No description available.'}</div>
+  `;
+
+  div.querySelector('.card-desc').onclick = (e) => e.target.classList.toggle('expanded');
+
+  const secWrap = document.createElement('div');
+  secWrap.className = 'section-list';
+
+  if (!offered) {
+    secWrap.innerHTML = `<div style="color:var(--light-text);font-size:.9rem">No scheduled sections found for <b>${quarter}</b>. (This course may still exist in the catalog.)</div>`;
+  } else {
+    course.sections.forEach(sec => secWrap.appendChild(makeSectionRow(course, sec)));
+  }
+
+  div.appendChild(secWrap);
+  return div;
+}
+
+function makeRecCard(course) {
+  const div = document.createElement('div');
+  div.className = 'card';
+  const terms = (course.terms && course.terms.length) ? course.terms.map(t => t.split(' ').slice(-1)[0]).join(', ') : '—';
+  div.innerHTML = `
+    <div class="tag">${course.category || 'AI'}</div>
+    <div><span class="card-code">${course.code}</span><span class="card-title"> — ${course.title || ''}</span></div>
+    <div class="card-meta">Units: ${course.units || 'TBD'} · Offered: ${terms}</div>
+    <div class="why">${course.why_gsb || ''}</div>
+    <div class="card-desc" title="Click to expand">${course.description || 'No description available.'}</div>
+    ${course.link ? `<div style="margin-top:10px"><a class="smalllink" href="${course.link}" target="_blank" rel="noreferrer">Open in ExploreCourses →</a></div>` : ''}
+    <div class="section-list" style="margin-top:12px"></div>
+  `;
+
+  div.querySelector('.card-desc').onclick = (e) => e.target.classList.toggle('expanded');
+
+  const secWrap = div.querySelector('.section-list');
+  if (!course.sections || !course.sections.length) {
+    secWrap.innerHTML = `<div style="color:var(--light-text);font-size:.9rem">No scheduled sections found for <b>${quarter}</b>.</div>`;
+  } else {
+    course.sections.forEach(sec => secWrap.appendChild(makeSectionRow(course, sec)));
+  }
+
+  return div;
+}
+
+async function apiGet(url) {
+  const resp = await fetch(url);
+  const data = await resp.json();
+  if (data && data.error) throw new Error(data.error);
+  return data;
 }
 
 async function doSearch(query) {
-  if (!query.trim()) return;
-  spinner.classList.add('show');
+  setLoading(true);
   searchResults.innerHTML = '';
   switchTab('search');
+
   try {
-    const resp = await fetch('/api/search?q=' + encodeURIComponent(query));
-    const data = await resp.json();
-    if (data.error) {
-      searchResults.innerHTML = '<div class="empty-msg">Error: ' + data.error + '</div>';
-    } else if (data.length === 0) {
-      searchResults.innerHTML = '<div class="empty-msg">No courses found. Try different keywords.</div>';
+    const data = await apiGet(`/api/search?q=${encodeURIComponent(query)}&year=${encodeURIComponent(academicYear||'')}&quarter=${encodeURIComponent(quarter||'')}&scheduledOnly=1`);
+    if (!Array.isArray(data) || data.length === 0) {
+      searchResults.innerHTML = '<div class="empty-msg">No matching courses found. Try different keywords.</div>';
+      addMsg('assistant', `No results for “${query}”. Try broader terms (e.g., “machine learning”, “foundation models”, “AI policy”).`);
     } else {
-      data.forEach(c => searchResults.appendChild(makeCard(c, false)));
+      data.forEach(c => searchResults.appendChild(makeCourseCard(c)));
+      addMsg('assistant', `Found ${data.length} courses for “${query}”. Add a specific section (LEC/DIS/etc.) to your schedule from each card.`);
     }
-  } catch(e) {
-    searchResults.innerHTML = '<div class="empty-msg">Search failed. Please try again.</div>';
+  } catch (e) {
+    searchResults.innerHTML = `<div class="empty-msg">Search failed: ${e.message}</div>`;
+    addMsg('assistant', `Search failed: ${e.message}`);
   }
-  spinner.classList.remove('show');
+
+  setLoading(false);
 }
 
 async function loadRecs() {
+  setLoading(true);
   recsResults.innerHTML = '';
+  switchTab('recs');
+
   try {
-    const resp = await fetch('/api/recommendations');
-    const data = await resp.json();
-    data.forEach(c => recsResults.appendChild(makeCard(c, true)));
-  } catch(e) {
-    recsResults.innerHTML = '<div class="empty-msg">Failed to load recommendations.</div>';
+    const data = await apiGet(`/api/recommendations?year=${encodeURIComponent(academicYear||'')}&quarter=${encodeURIComponent(quarter||'')}`);
+    if (!Array.isArray(data) || data.length === 0) {
+      recsResults.innerHTML = '<div class="empty-msg">No recommendations returned.</div>';
+      addMsg('assistant', 'No recommendations returned (unexpected).');
+    } else {
+      data.forEach(c => recsResults.appendChild(makeRecCard(c)));
+      addMsg('assistant', `Here are AI-centric picks for a GSB lens (filtered to sections scheduled in ${quarter}, if available).`);
+    }
+  } catch (e) {
+    recsResults.innerHTML = `<div class="empty-msg">Failed to load recommendations: ${e.message}</div>`;
+    addMsg('assistant', `Failed to load recommendations: ${e.message}`);
   }
+
+  setLoading(false);
+}
+
+function parseCourseCode(text) {
+  // Match things like "CS 229", "CS229", "MS&E 226", "MSE 226".
+  const m = text.toUpperCase().match(/\b([A-Z]{2,5}(?:\s*&\s*E)?)(?:\s|-)?(\d{1,3}[A-Z]?)\b/);
+  if (!m) return null;
+  let subj = m[1].replace(/\s+/g,'');
+  // Allow users to type MSE instead of MS&E.
+  if (subj === 'MSE') subj = 'MS&E';
+  if (subj === 'MS&E') subj = 'MS&E';
+  const num = m[2];
+  return `${subj} ${num}`.replace(/\s+/g,' ').trim();
+}
+
+async function addByCode(code, sectionNumber=null) {
+  setLoading(true);
+  try {
+    const data = await apiGet(`/api/search?q=${encodeURIComponent(code)}&year=${encodeURIComponent(academicYear||'')}&quarter=${encodeURIComponent(quarter||'')}&scheduledOnly=0`);
+    if (!Array.isArray(data) || data.length === 0) {
+      addMsg('assistant', `I couldn't find anything for ${code}.`);
+      return;
+    }
+
+    // Find exact code match if present.
+    const course = data.find(c => (c.code || '').toUpperCase() === code.toUpperCase()) || data[0];
+
+    if (!course.sections || course.sections.length === 0) {
+      addMsg('assistant', `${course.code} exists, but I didn’t see scheduled sections for ${quarter}. Try changing quarter/year.`);
+      return;
+    }
+
+    let sec = null;
+    if (sectionNumber) {
+      sec = course.sections.find(s => (s.sectionNumber || '') === sectionNumber);
+    }
+    if (!sec) {
+      // Prefer LEC if available.
+      sec = course.sections.find(s => (s.component || '').toUpperCase() === 'LEC') || course.sections[0];
+    }
+
+    const payload = {
+      courseCode: course.code,
+      title: course.title,
+      units: sec.units || course.units,
+      term: sec.term,
+      classId: sec.classId,
+      component: sec.component,
+      sectionNumber: sec.sectionNumber,
+      schedules: sec.schedules || [],
+    };
+
+    if (isInSchedule(payload)) {
+      addMsg('assistant', `${payload.courseCode} ${payload.component} ${payload.sectionNumber || ''} is already in your schedule.`);
+      return;
+    }
+
+    schedule.push(payload);
+    renderSchedule();
+    addMsg('assistant', `Added ${payload.courseCode} ${payload.component} ${payload.sectionNumber || ''}. (${meetingSummary(payload.schedules)})`);
+    toast(`Added ${payload.courseCode}`);
+  } catch (e) {
+    addMsg('assistant', `Add failed: ${e.message}`);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function removeByCode(code) {
+  const before = schedule.length;
+  schedule = schedule.filter(s => (s.courseCode || '').toUpperCase() !== code.toUpperCase());
+  const after = schedule.length;
+  renderSchedule();
+  if (after < before) {
+    addMsg('assistant', `Removed all sections for ${code}.`);
+    toast(`Removed ${code}`);
+  } else {
+    addMsg('assistant', `I didn’t see ${code} in your schedule.`);
+  }
+}
+
+async function runCommand(text) {
+  const t = (text || '').trim();
+  if (!t) return;
+
+  addMsg('user', t);
+
+  const lower = t.toLowerCase();
+
+  // Recommend intent
+  if (lower.includes('recommend')) {
+    await loadRecs();
+    return;
+  }
+
+  // Export
+  if (lower.includes('export') || lower.includes('ics')) {
+    exportICS();
+    return;
+  }
+
+  // Remove
+  if (lower.startsWith('remove') || lower.startsWith('drop') || lower.startsWith('delete')) {
+    const code = parseCourseCode(t);
+    if (!code) {
+      addMsg('assistant', 'Tell me which course to remove (e.g., “remove CS 229”).');
+      return;
+    }
+    removeByCode(code);
+    return;
+  }
+
+  // Add
+  if (lower.startsWith('add')) {
+    const code = parseCourseCode(t);
+    if (!code) {
+      addMsg('assistant', 'Tell me what to add (e.g., “add CS 229”).');
+      return;
+    }
+    const secMatch = t.match(/section\s+(\d{2})/i) || t.match(/\b(\d{2})\b/);
+    const sectionNumber = secMatch ? secMatch[1] : null;
+    await addByCode(code, sectionNumber);
+    return;
+  }
+
+  // Search
+  const searchPrefix = /^(find|search|show me|look for)\b/i;
+  const query = t.replace(searchPrefix, '').trim();
+  await doSearch(query || t);
+}
+
+function pad2(n){return (n<10?'0':'')+n}
+function monthNum(mon){
+  const m = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  return m[(mon||'').toLowerCase().slice(0,3)] || 0;
+}
+function parseStanfordDate(s){
+  // e.g. "Sep 22, 2025"
+  const m = (s||'').match(/([A-Za-z]{3})\s+(\d{1,2}),\s*(\d{4})/);
+  if(!m) return null;
+  return {y:parseInt(m[3],10), mo:monthNum(m[1]), d:parseInt(m[2],10)};
+}
+function parseStanfordTime(s){
+  // e.g. "1:30:00 PM"
+  const m = (s||'').match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)/i);
+  if(!m) return null;
+  let hh=parseInt(m[1],10), mm=parseInt(m[2],10), ss=parseInt(m[3]||'0',10);
+  const ap=(m[4]||'').toUpperCase();
+  if(ap==='PM' && hh!==12) hh+=12;
+  if(ap==='AM' && hh===12) hh=0;
+  return {hh,mm,ss};
+}
+function ymd(d){return `${d.y}${pad2(d.mo)}${pad2(d.d)}`}
+function dayToByday(day){
+  const m={Monday:'MO',Tuesday:'TU',Wednesday:'WE',Thursday:'TH',Friday:'FR',Saturday:'SA',Sunday:'SU'};
+  return m[day] || null;
 }
 
 function exportICS() {
   if (schedule.length === 0) return;
-  let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Stanford Scheduler//EN\r\n';
-  const base = new Date(2025, 8, 22, 9, 0); // Sep 22, 2025 placeholder
-  schedule.forEach((c, i) => {
-    const start = new Date(base);
-    start.setHours(9 + i);
-    const end = new Date(start);
-    end.setMinutes(end.getMinutes() + 50);
-    const fmt = d => d.toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
-    ics += 'BEGIN:VEVENT\r\n';
-    ics += 'SUMMARY:' + c.code + ' - ' + c.title + '\r\n';
-    ics += 'DTSTART:' + fmt(start) + '\r\n';
-    ics += 'DTEND:' + fmt(end) + '\r\n';
-    ics += 'DESCRIPTION:' + (c.units || '') + ' units\\n' + (c.description || '').substring(0, 200).replace(/\n/g, '\\n') + '\r\n';
-    ics += 'RRULE:FREQ=WEEKLY;COUNT=10\r\n';
-    ics += 'END:VEVENT\r\n';
+
+  let ics = '';
+  ics += 'BEGIN:VCALENDAR\r\n';
+  ics += 'VERSION:2.0\r\n';
+  ics += 'PRODID:-//Stanford Scheduler//EN\r\n';
+  ics += 'CALSCALE:GREGORIAN\r\n';
+
+  const tzid = 'America/Los_Angeles';
+
+  schedule.forEach((sec, idx) => {
+    (sec.schedules || []).forEach((sc, jdx) => {
+      const sd = parseStanfordDate(sc.startDate);
+      const ed = parseStanfordDate(sc.endDate);
+      const st = parseStanfordTime(sc.startTime);
+      const et = parseStanfordTime(sc.endTime);
+      const days = (sc.days || []).map(dayToByday).filter(Boolean);
+
+      if (!sd || !ed || !st || !et || days.length === 0) {
+        // Skip unschedulable items.
+        return;
+      }
+
+      const dtStart = `${ymd(sd)}T${pad2(st.hh)}${pad2(st.mm)}${pad2(st.ss)}`;
+      const dtEnd = `${ymd(sd)}T${pad2(et.hh)}${pad2(et.mm)}${pad2(et.ss)}`;
+      const until = `${ymd(ed)}T235900`;
+
+      ics += 'BEGIN:VEVENT\r\n';
+      ics += `UID:${sec.classId || idx}-${jdx}@stanford-scheduler\r\n`;
+      ics += `SUMMARY:${sec.courseCode} ${sec.component} ${sec.sectionNumber || ''} - ${sec.title}\r\n`;
+      ics += `DTSTART;TZID=${tzid}:${dtStart}\r\n`;
+      ics += `DTEND;TZID=${tzid}:${dtEnd}\r\n`;
+      if (sc.location) ics += `LOCATION:${sc.location.replace(/\n/g,' ')}\r\n`;
+      ics += `RRULE:FREQ=WEEKLY;BYDAY=${days.join(',')};UNTIL=${until}\r\n`;
+      ics += 'END:VEVENT\r\n';
+    });
   });
+
   ics += 'END:VCALENDAR\r\n';
+
   const blob = new Blob([ics], {type: 'text/calendar'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'stanford_schedule.ics';
   a.click();
-  toast('Schedule exported as .ics');
+  toast('Exported .ics');
 }
 
-searchInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') doSearch(searchInput.value);
+async function init() {
+  addMsg('assistant', 'Tell me what you want. If you just say a topic, I’ll search. If you say “recommend”, I’ll generate AI-centric picks for a GSB lens.');
+
+  loadLocal();
+  renderSchedule();
+
+  try {
+    const meta = await apiGet('/api/meta');
+
+    yearSel.innerHTML = '';
+    (meta.academicYears || []).forEach(y => {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y.slice(0,4) + '-' + y.slice(4);
+      yearSel.appendChild(opt);
+    });
+
+    qSel.innerHTML = '';
+    (meta.quarters || []).forEach(q => {
+      const opt = document.createElement('option');
+      opt.value = q;
+      opt.textContent = q;
+      qSel.appendChild(opt);
+    });
+
+    academicYear = academicYear || meta.defaultAcademicYear;
+    quarter = quarter || meta.defaultQuarter;
+
+    yearSel.value = academicYear;
+    qSel.value = quarter;
+
+    saveLocal();
+
+    addMsg('assistant', `Defaulting to next quarter: ${quarter} (${yearSel.options[yearSel.selectedIndex]?.textContent || academicYear}).`);
+  } catch (e) {
+    addMsg('assistant', 'Could not load defaults from server. You can still search.');
+  }
+}
+
+runBtn.onclick = async () => {
+  const text = cmdEl.value;
+  cmdEl.value = '';
+  await runCommand(text);
+};
+
+cmdEl.addEventListener('keydown', async (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    runBtn.click();
+  }
 });
+
+yearSel.onchange = () => {
+  academicYear = yearSel.value;
+  saveLocal();
+  toast('Academic year set');
+};
+
+qSel.onchange = () => {
+  quarter = qSel.value;
+  saveLocal();
+  toast('Quarter set');
+};
+
+clearBtn.onclick = () => {
+  searchResults.innerHTML = '';
+  recsResults.innerHTML = '';
+  toast('Cleared');
+};
+
+init();
 </script>
 </body>
 </html>
