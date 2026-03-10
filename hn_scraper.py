@@ -1,66 +1,98 @@
-#!/usr/bin/env python3
-"""Scrape the top 10 article titles from Hacker News."""
+#!/usr/env python3
+"""
+Hacker News Top 10 Article Scraper
 
+Scrapes the top 10 article titles from Hacker News using their official JSON API.
+Handles errors gracefully with proper exception handling.
+"""
+
+import requests
 import sys
-import warnings
-
-# Suppress urllib3 NotOpenSSLWarning on macOS system Python — must come before import
-warnings.filterwarnings("ignore", message=".*OpenSSL.*")
-
-import requests  # noqa: E402
-from concurrent.futures import ThreadPoolExecutor, as_completed  # noqa: E402
-
-HN_TOP_STORIES = "https://hacker-news.firebaseio.com/v0/topstories.json"
-HN_ITEM = "https://hacker-news.firebaseio.com/v0/item/{}.json"
-NUM_STORIES = 10
-TIMEOUT = 10  # seconds
+from typing import List, Optional
 
 
-def fetch_item(sid: int) -> tuple[int, str]:
-    """Fetch a single HN item and return (story_id, title)."""
-    resp = requests.get(HN_ITEM.format(sid), timeout=TIMEOUT)
-    resp.raise_for_status()
-    data = resp.json()
-    return sid, data.get("title", "(no title)")
+HACKER_NEWS_TOP_STORIES_URL = "https://hacker-news.firebaseio.com/topstories.json"
+HACKER_NEWS_ITEM_URL = "https://hacker-news.firebaseio.com/item/{}.json"
+TOP_N = 10
 
 
-def fetch_top_titles(n: int = NUM_STORIES) -> list[str]:
-    """Return the titles of the top *n* HN stories, fetched concurrently."""
-    resp = requests.get(HN_TOP_STORIES, timeout=TIMEOUT)
-    resp.raise_for_status()
-    story_ids = resp.json()[:n]
-
-    # Fetch all items concurrently — much faster than serial requests
-    results: dict[int, str] = {}
-    with ThreadPoolExecutor(max_workers=n) as pool:
-        futures = {pool.submit(fetch_item, sid): sid for sid in story_ids}
-        for future in as_completed(futures):
-            sid, title = future.result()  # propagates exceptions
-            results[sid] = title
-
-    # Preserve original ranking order
-    return [results[sid] for sid in story_ids]
-
-
-def main() -> None:
+def fetch_top_story_ids() -> Optional[List[int]]:
+    """Fetch the list of top story IDs from Hacker News."""
     try:
-        titles = fetch_top_titles()
-    except requests.ConnectionError:
-        print("Error: could not connect to Hacker News API.", file=sys.stderr)
-        sys.exit(1)
-    except requests.Timeout:
-        print("Error: request timed out.", file=sys.stderr)
-        sys.exit(1)
-    except requests.HTTPError as exc:
-        print(f"Error: HTTP {exc.response.status_code}.", file=sys.stderr)
-        sys.exit(1)
-    except requests.RequestException as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        sys.exit(1)
+        response = requests.get(HACKER_NEWS_TOP_STORIES_URL, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching top stories: {e}")
+        return None
+    except ValueError as e:
+        print(f"Error parsing top stories JSON: {e}")
+        return None
 
-    print("Top 10 Hacker News articles:\n")
+
+def fetch_story_details(story_id: int) -> Optional[dict]:
+    """Fetch details for a specific story by ID."""
+    try:
+        url = f"{HACKER_NEWS_ITEM_URL}"
+        response = requests.get(url.format(story_id), timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching story {story_id}: {e}")
+        return None
+    except ValueError as e:
+        print(f"Error parsing story {story_id} JSON: {e}")
+        return None
+
+
+def scrape_hacker_news_top_titles(n: int = TOP_N) -> List[str]:
+    """
+    Scrapes the top N article titles from Hacker News.
+    
+    Args:
+        n: Number of top articles to fetch (default: 10)
+    
+    Returns:
+        List of article titles
+    """
+    titles = []
+    
+    # Fetch top story IDs
+    story_ids = fetch_top_story_ids()
+    if not story_ids:
+        return titles
+    
+    # Limit to top N
+    story_ids = story_ids[:n]
+    
+    # Fetch each story's title
+    for story_id in story_ids:
+        story = fetch_story_details(story_id)
+        if story and 'title' in story:
+            titles.append(story['title'])
+        elif story:
+            # Story exists but no title (might be deleted or malformed)
+            titles.append(f"[No title for story {story_id}]")
+    
+    return titles
+
+
+def main():
+    """Main function to scrape and print Hacker News top titles."""
+    print("📰 Fetching top 10 articles from Hacker News...\n")
+    
+    titles = scrape_hacker_news_top_titles(TOP_N)
+    
+    if not titles:
+        print("❌ Failed to fetch any articles from Hacker News.")
+        sys.exit(1)
+    
+    print(f"✅ Successfully fetched {len(titles)} articles:\n")
+    
     for i, title in enumerate(titles, 1):
-        print(f"  {i:>2}. {title}")
+        print(f"{i}. {title}")
+    
+    print(f"\n🎉 Done! Retrieved {len(titles)} titles.")
 
 
 if __name__ == "__main__":
