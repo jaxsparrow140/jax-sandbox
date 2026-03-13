@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stanford Course Scheduler - GSB AI Recommendations</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f7;
+            color: #1d1d1f;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            color: #861913;  /* Stanford red */
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #6e6e73;
+            font-size: 16px;
+        }
+        
+        .search-box {
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 15px 20px;
+            font-size: 16px;
+            border: 2px solid #e5e5e7;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        .search-input:focus {
+            border-color: #861913;
+        }
+        
+        .search-input::placeholder {
+            color: #86868b;
+        }
+        
+        .btn {
+            background: #861913;
+            color: #fff;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 15px;
+        }
+        
+        .btn:hover {
+            background: #6b120f;
+        }
+        
+        .btn-secondary {
+            background: #e5e5e7;
+            color: #1d1d1f;
+        }
+        
+        .btn-secondary:hover {
+            background: #d1d1d6;
+        }
+        
+        .section {
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #1d1d1f;
+        }
+        
+        .course-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        
+        .course-card {
+            background: #fafafa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e5e5e7;
+            transition: box-shadow 0.2s;
+        }
+        
+        .course-card:hover {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .course-code {
+            font-size: 14px;
+            color: #861913;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .course-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #1d1d1f;
+        }
+        
+        .course-description {
+            font-size: 14px;
+            color: #6e6e73;
+            line-height: 1.5;
+            margin-bottom: 15px;
+        }
+        
+        .course-meta {
+            font-size: 12px;
+            color: #86868b;
+            margin-top: 15px;
+        }
+        
+        .badge {
+            display: inline-block;
+            background: #861913;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            margin-top: 10px;
+        }
+        
+        .add-btn {
+            background: #861913;
+            color: #fff;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            margin-top: 10px;
+            width: 100%;
+        }
+        
+        .add-btn:hover {
+            background: #6b120f;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #86868b;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #86868b;
+        }
+        
+        .my-plan {
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .plan-list {
+            list-style: none;
+        }
+        
+        .plan-item {
+            padding: 15px;
+            border-bottom: 1px solid #e5e5e7;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .plan-item:last-child {
+            border-bottom: none;
+        }
+        
+        .remove-btn {
+            background: #ff3b30;
+            color: #fff;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            background: #e5e5e7;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .tab.active {
+            background: #861913;
+            color: #fff;
+        }
+        
+        @media (max-width: 768px) {
+            .course-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Stanford Course Scheduler</h1>
+            <p class="subtitle">AI-powered course discovery for GSB students</p>
+        </header>
+        
+        <div class="search-box">
+            <h2 style="margin-bottom: 15px; font-size: 18px;">Natural Language Search</h2>
+            <input type="text" class="search-input" id="searchInput" 
+                   placeholder="Try: 'I want AI courses for business students' or 'machine learning classes'">
+            <button class="btn" onclick="search()">Search Courses</button>
+            <button class="btn btn-secondary" onclick="loadRecommendations()" style="margin-left: 10px;">
+                Show AI Recommendations
+            </button>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="showSection('search')">Search Results</button>
+            <button class="tab" onclick="showSection('recommendations')">AI Recommendations</button>
+            <button class="tab" onclick="showSection('plan')">My Plan</button>
+        </div>
+        
+        <div id="searchSection" class="section">
+            <h2 class="section-title">Search Results</h2>
+            <div id="searchResults">
+                <div class="empty-state">Search for courses using natural language</div>
+            </div>
+        </div>
+        
+        <div id="recommendationsSection" class="section" style="display: none;">
+            <h2 class="section-title">AI-Centric Recommendations for GSB Students</h2>
+            <div id="recommendationsResults">
+                <div class="loading">Loading recommendations...</div>
+            </div>
+        </div>
+        
+        <div id="planSection" class="my-plan" style="display: none;">
+            <h2 class="section-title">My Course Plan</h2>
+            <ul class="plan-list" id="planList">
+                <div class="empty-state">No courses added yet. Search and add courses to your plan.</div>
+            </ul>
+            <button class="btn" onclick="savePlan()" style="margin-top: 20px;">Save Plan</button>
+        </div>
+    </div>
+    
+    <script>
+        let myPlan = [];
+        
+        function showSection(section) {
+            document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            
+            if (section === 'search') {
+                document.getElementById('searchSection').style.display = 'block';
+                document.querySelectorAll('.tab')[0].classList.add('active');
+            } else if (section === 'recommendations') {
+                document.getElementById('recommendationsSection').style.display = 'block';
+                document.querySelectorAll('.tab')[1].classList.add('active');
+                loadRecommendations();
+            } else if (section === 'plan') {
+                document.getElementById('planSection').style.display = 'block';
+                document.querySelectorAll('.tab')[2].classList.add('active');
+                renderPlan();
+            }
+        }
+        
+        async function search() {
+            const query = document.getElementById('searchInput').value;
+            if (!query) return;
+            
+            const resultsDiv = document.getElementById('searchResults');
+            resultsDiv.innerHTML = '<div class="loading">Searching Stanford courses...</div>';
+            
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                });
+                
+                const data = await response.json();
+                
+                if (data.results && data.results.length > 0) {
+                    renderCourses(data.results, resultsDiv);
+                } else {
+                    resultsDiv.innerHTML = '<div class="empty-state">No courses found. Try a different search.</div>';
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = '<div class="empty-state">Error searching courses. Please try again.</div>';
+            }
+        }
+        
+        async function loadRecommendations() {
+            const resultsDiv = document.getElementById('recommendationsResults');
+            resultsDiv.innerHTML = '<div class="loading">Loading AI recommendations...</div>';
+            
+            try {
+                const response = await fetch('/api/recommendations');
+                const data = await response.json();
+                
+                if (data.recommendations && data.recommendations.length > 0) {
+                    renderCourses(data.recommendations, resultsDiv, true);
+                } else {
+                    resultsDiv.innerHTML = '<div class="empty-state">No recommendations available.</div>';
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = '<div class="empty-state">Error loading recommendations.</div>';
+            }
+        }
+        
+        function renderCourses(courses, container, isRecommendation = false) {
+            container.innerHTML = '<div class="course-grid"></div>';
+            const grid = container.querySelector('.course-grid');
+            
+            courses.forEach(course => {
+                const card = document.createElement('div');
+                card.className = 'course-card';
+                
+                const code = course.code || 'Unknown';
+                const title = course.title || 'No title';
+                const description = course.description || 'No description available';
+                const units = course.units || 'Unknown units';
+                
+                card.innerHTML = `
+                    <div class="course-code">${code}</div>
+                    <div class="course-title">${title}</div>
+                    <div class="course-description">${description.substring(0, 200)}${description.length > 200 ? '...' : ''}</div>
+                    <div class="course-meta">Units: ${units}</div>
+                    ${isRecommendation && course.recommendation_reason ? 
+                        `<div class="badge">${course.recommendation_reason}</div>` : ''}
+                    <button class="add-btn" onclick="addToPlan('${code}', '${title}')">Add to Plan</button>
+                `;
+                
+                grid.appendChild(card);
+            });
+        }
+        
+        function addToPlan(code, title) {
+            if (!myPlan.find(c => c.code === code)) {
+                myPlan.push({ code, title });
+                renderPlan();
+                alert(`${code} added to your plan!`);
+            } else {
+                alert(`${code} is already in your plan.`);
+            }
+        }
+        
+        function renderPlan() {
+            const planList = document.getElementById('planList');
+            
+            if (myPlan.length === 0) {
+                planList.innerHTML = '<div class="empty-state">No courses added yet.</div>';
+                return;
+            }
+            
+            planList.innerHTML = '';
+            myPlan.forEach((course, index) => {
+                const item = document.createElement('li');
+                item.className = 'plan-item';
+                item.innerHTML = `
+                    <span><strong>${course.code}</strong> - ${course.title}</span>
+                    <button class="remove-btn" onclick="removeFromPlan(${index})">Remove</button>
+                `;
+                planList.appendChild(item);
+            });
+        }
+        
+        function removeFromPlan(index) {
+            myPlan.splice(index, 1);
+            renderPlan();
+        }
+        
+        async function savePlan() {
+            if (myPlan.length === 0) {
+                alert('Your plan is empty!');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/plan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ courses: myPlan })
+                });
+                
+                const data = await response.json();
+                alert(data.message);
+            } catch (error) {
+                alert('Error saving plan.');
+            }
+        }
+        
+        // Auto-load recommendations on page load
+        loadRecommendations();
+    </script>
+</body>
+</html>
