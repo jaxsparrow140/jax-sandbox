@@ -1,55 +1,46 @@
-"""Pure-Python R-squared calculation — no external libraries."""
+# R-squared calculation function
+# No sklearn or numpy dependencies
 
-
-def r_squared(actual: list[float], predicted: list[float]) -> float:
-    """Return the coefficient of determination (R²) for actual vs predicted values.
-
-    R² = 1 - SS_res / SS_tot
-
-    where
-        SS_res = Σ (actual_i - predicted_i)²   (residual sum of squares)
-        SS_tot = Σ (actual_i - mean(actual))²   (total sum of squares)
-
+def r_squared(actual, predicted):
+    """
+    Calculate the R-squared value given two lists of actual and predicted values.
+    
     Args:
-        actual:    List of observed values.
-        predicted: List of predicted values (same length as actual).
-
+        actual: list of actual values
+        predicted: list of predicted values
+        
     Returns:
-        R² as a float.  1.0 = perfect fit, 0.0 = no better than predicting
-        the mean, negative = worse than the mean.
-
-    Raises:
-        ValueError: If the inputs are empty or different lengths.
-        ZeroDivisionError: If all actual values are identical (SS_tot == 0).
+        float: R-squared value
     """
     if len(actual) != len(predicted):
-        raise ValueError(
-            f"Length mismatch: actual has {len(actual)} elements, "
-            f"predicted has {len(predicted)}"
-        )
-    if not actual:
-        raise ValueError("Inputs must not be empty")
-
+        raise ValueError("Actual and predicted lists must have the same length")
+    
     n = len(actual)
+    if n == 0:
+        return 0
+    
+    # Calculate mean of actual values
     mean_actual = sum(actual) / n
+    
+    # Calculate total sum of squares (TSS)
+    tss = sum((a - mean_actual) ** 2 for a in actual)
+    
+    # Calculate residual sum of squares (RSS)
+    rss = sum((a - p) ** 2 for a, p in zip(actual, predicted))
+    
+    # Handle edge case where TSS is 0 (all actual values are the same)
+    if tss == 0:
+        return 1.0 if rss == 0 else 0.0
+    
+    # Calculate R-squared
+    r2 = 1 - (rss / tss)
+    
+    return r2
 
-    ss_res = sum((a - p) ** 2 for a, p in zip(actual, predicted))
-    ss_tot = sum((a - mean_actual) ** 2 for a in actual)
-
-    if ss_tot == 0:
-        raise ZeroDivisionError(
-            "R² is undefined when all actual values are identical (SS_tot == 0)"
-        )
-
-    return 1 - ss_res / ss_tot
-
-
-# ── quick smoke test ────────────────────────────────────────────────
+# Example usage (for testing)
 if __name__ == "__main__":
-    y      = [3, -0.5, 2, 7]
-    y_hat  = [2.5, 0.0, 2, 8]
-
-    r2 = r_squared(y, y_hat)
-    print(f"R² = {r2:.6f}")  # expected ≈ 0.948548
-    assert abs(r2 - 0.948548) < 1e-4, f"Unexpected R²: {r2}"
-    print("✓ smoke test passed")
+    # Test with sample data
+    actual = [3, -0.5, 2, 7]
+    predicted = [2.5, 0.0, 2, 8]
+    result = r_squared(actual, predicted)
+    print(f"R-squared: {result}")
