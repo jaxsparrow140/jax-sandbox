@@ -1,108 +1,153 @@
-"""trie.py
-
-A minimal Trie (prefix tree) implementation.
-
-Public API:
-- insert(word): insert a word
-- search(word): exact-word membership
-- starts_with(prefix): whether any inserted word has the given prefix
-- delete(word): remove a word and clean up now-unneeded nodes
-
-No external dependencies.
 """
-
+Trie (Prefix Tree) implementation with insert, search, starts_with, and delete.
+No external libraries.
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 
-@dataclass
 class TrieNode:
-    """Single node in a trie."""
+    __slots__ = ("children", "is_end")
 
-    children: Dict[str, "TrieNode"] = field(default_factory=dict)
-    is_end: bool = False
+    def __init__(self):
+        self.children: Dict[str, TrieNode] = {}
+        self.is_end: bool = False
 
 
 class Trie:
-    """Trie data structure for efficient prefix operations."""
-
-    def __init__(self) -> None:
+    def __init__(self):
         self.root = TrieNode()
 
+    # ── core operations ──────────────────────────────────────────────
+
     def insert(self, word: str) -> None:
+        """Insert a word into the trie."""
         node = self.root
         for ch in word:
-            node = node.children.setdefault(ch, TrieNode())
+            if ch not in node.children:
+                node.children[ch] = TrieNode()
+            node = node.children[ch]
         node.is_end = True
 
     def search(self, word: str) -> bool:
-        node = self._find_node(word)
+        """Return True if the exact word exists in the trie."""
+        node = self._find(word)
         return node is not None and node.is_end
 
     def starts_with(self, prefix: str) -> bool:
-        return self._find_node(prefix) is not None
+        """Return True if any word in the trie starts with the given prefix."""
+        return self._find(prefix) is not None
 
     def delete(self, word: str) -> bool:
-        """Delete `word` if present.
-
-        Returns:
-            True if the word existed and was deleted; False otherwise.
-
-        Deletion prunes nodes that become unreachable (no children, not end-of-word).
         """
+        Delete a word from the trie.  Cleans up nodes that are no longer
+        part of any other word.  Returns True if the word was found and
+        removed, False otherwise.
+        """
+        found, _ = self._delete(self.root, word, 0)
+        return found
 
-        def _delete(node: TrieNode, i: int) -> bool:
-            # Returns whether this node should be pruned from its parent.
-            if i == len(word):
-                if not node.is_end:
-                    return False  # word not present
-                node.is_end = False
-                return len(node.children) == 0
+    # ── internals ────────────────────────────────────────────────────
 
-            ch = word[i]
-            child = node.children.get(ch)
-            if child is None:
-                return False  # word not present
-
-            prune_child = _delete(child, i + 1)
-            if prune_child:
-                # Child subtree is now empty and not a word end.
-                del node.children[ch]
-
-            # Prune this node if it's now useless (except the root, which is never removed).
-            return (node is not self.root) and (not node.is_end) and (len(node.children) == 0)
-
-        # Special-case: empty word uses root's is_end marker.
-        if word == "":
-            if not self.root.is_end:
-                return False
-            self.root.is_end = False
-            return True
-
-        # We need a "found" signal independent of pruning; easiest is to check search first.
-        if not self.search(word):
-            return False
-
-        _delete(self.root, 0)
-        return True
-
-    def _find_node(self, s: str) -> Optional[TrieNode]:
+    def _find(self, prefix: str) -> Optional[TrieNode]:
+        """Walk the trie following `prefix`; return the landing node or None."""
         node = self.root
-        for ch in s:
-            node = node.children.get(ch)  # type: ignore[assignment]
-            if node is None:
+        for ch in prefix:
+            if ch not in node.children:
                 return None
+            node = node.children[ch]
         return node
 
-    def __repr__(self) -> str:
-        words: List[str] = []
-        self._collect_words(self.root, "", words)
-        return f"Trie({sorted(words)})"
+    def _delete(self, node: TrieNode, word: str, depth: int) -> tuple:
+        """
+        Recursively delete `word` starting at `depth`.
 
-    def _collect_words(self, node: TrieNode, prefix: str, out: List[str]) -> None:
-        if node.is_end:
-            out.append(prefix)
-        for ch, child in node.children.items():
-            self._collect_words(child, prefix + ch, out)
+        Returns (found, should_prune):
+          found       – True if the word existed and was removed
+          should_prune – True when the parent should drop this child node
+        """
+        if depth == len(word):
+            if not node.is_end:
+                return False, False        # word doesn't exist
+            node.is_end = False            # un-mark end
+            return True, len(node.children) == 0
+
+        ch = word[depth]
+        child = node.children.get(ch)
+        if child is None:
+            return False, False            # word doesn't exist
+
+        found, should_prune = self._delete(child, word, depth + 1)
+
+        if should_prune:
+            del node.children[ch]
+            # Propagate prune if this node is now a childless non-terminal
+            return found, not node.is_end and len(node.children) == 0
+
+        return found, False
+
+
+# ── tests ────────────────────────────────────────────────────────────
+
+def _run_tests():
+    t = Trie()
+
+    # basic insert / search / starts_with
+    t.insert("apple")
+    assert t.search("apple") is True
+    assert t.search("app") is False
+    assert t.starts_with("app") is True
+    assert t.starts_with("apl") is False
+
+    t.insert("app")
+    assert t.search("app") is True
+
+    # delete leaf word — should not break prefix
+    assert t.delete("apple") is True
+    assert t.search("apple") is False
+    assert t.search("app") is True       # "app" still there
+
+    # delete remaining word
+    assert t.delete("app") is True
+    assert t.search("app") is False
+    assert t.starts_with("a") is False    # trie fully cleaned up
+
+    # delete non-existent word
+    assert t.delete("ghost") is False
+
+    # delete prefix word — should not break longer word
+    t.insert("banana")
+    t.insert("ban")
+    assert t.delete("ban") is True
+    assert t.search("ban") is False
+    assert t.search("banana") is True     # longer word intact
+
+    # delete longer word — should clean up suffix nodes
+    assert t.delete("banana") is True
+    assert t.starts_with("b") is False    # all cleaned up
+
+    # bulk insert then selective delete
+    words = ["car", "card", "care", "cared", "cars"]
+    for w in words:
+        t.insert(w)
+    assert t.delete("cared") is True
+    assert t.search("care") is True
+    assert t.search("cared") is False
+    assert t.delete("cars") is True
+    assert t.search("car") is True
+    assert t.starts_with("cars") is False
+    assert t.starts_with("car") is True
+
+    # empty-string edge case
+    t2 = Trie()
+    t2.insert("")
+    assert t2.search("") is True
+    t2.delete("")
+    assert t2.search("") is False
+
+    print("All tests passed.")
+
+
+if __name__ == "__main__":
+    _run_tests()
