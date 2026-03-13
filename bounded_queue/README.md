@@ -20,9 +20,9 @@ The implementation uses:
 
 ## Usage
 
-1. Import the class:
+1. Import the classes:
 ```python
-from bounded_queue import BoundedBlockingQueue
+from bounded_queue import BoundedBlockingQueue, Empty, Full
 ```
 
 2. Create a queue with a maximum size:

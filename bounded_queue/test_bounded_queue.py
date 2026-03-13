@@ -5,30 +5,33 @@ Test script for BoundedBlockingQueue with 3 producers and 2 consumers.
 import threading
 import time
 import random
-from bounded_queue import BoundedBlockingQueue
+from bounded_queue import BoundedBlockingQueue, Empty, Full
 
 def producer(queue, producer_id, num_items):
     """Producer function that adds items to the queue."""
     for i in range(num_items):
-        item = f"item-{producer_id}-{i}"
-        # Simulate some work before producing
+        item = f"producer-{producer_id}-item-{i}"
+        # Random delay to simulate varying production rates
         time.sleep(random.uniform(0.1, 0.5))
-        queue.put(item)
-        print(f"Producer {producer_id} put {item}")
-    print(f"Producer {producer_id} finished")
+        try:
+            queue.put(item)
+            print(f"Producer {producer_id} put: {item}")
+        except Full:
+            print(f"Producer {producer_id} failed to put {item}: queue full")
 
 def consumer(queue, consumer_id):
     """Consumer function that removes items from the queue."""
     while True:
         try:
-            # Simulate some work before consuming
-            time.sleep(random.uniform(0.1, 0.3))
-            item = queue.get(timeout=1)
-            print(f"Consumer {consumer_id} got {item}")
-        except BoundedBlockingQueue.Empty:
-            # Timeout occurred, check if we should continue
-            # We'll let consumers run until all producers are done
-            continue
+            # Random delay to simulate varying consumption rates
+            time.sleep(random.uniform(0.1, 0.7))
+            item = queue.get()
+            print(f"Consumer {consumer_id} got: {item}")
+            # Simulate some work
+            time.sleep(random.uniform(0.1, 0.5))
+        except Empty:
+            print(f"Consumer {consumer_id} found queue empty, exiting")
+            break
 
 def main():
     # Create a bounded queue with capacity of 5
@@ -61,8 +64,6 @@ def main():
     # We'll wait a bit longer for consumers to process all items
     time.sleep(2)
     
-    # Since consumers run indefinitely, we'll stop them by setting a flag
-    # But for this test, we'll just let them timeout and exit naturally
     print("All producers finished. Waiting for consumers to finish processing...")
     
     # Give consumers time to process remaining items
