@@ -1,81 +1,77 @@
-"""Thread-safe bounded blocking queue using only threading primitives.
-
-No queue.Queue allowed — built from Lock, Condition, and a collections.deque.
+"""
+Thread-safe bounded blocking queue using only threading primitives.
+No queue.Queue allowed.
 """
 
 import threading
-from collections import deque
 
 
 class Full(Exception):
-    """Raised by put_nowait when the queue is at capacity."""
+    """Raised by put_nowait when the queue is full."""
 
 
 class Empty(Exception):
-    """Raised by get_nowait when the queue has no items."""
+    """Raised by get_nowait when the queue is empty."""
 
 
 class BoundedBlockingQueue:
-    """A fixed-capacity, thread-safe FIFO queue.
+    """
+    A fixed-capacity, thread-safe FIFO queue.
 
-    - put(item)       blocks the caller until space is available.
-    - get()           blocks the caller until an item is available.
-    - put_nowait(item) raises Full immediately if the queue is at capacity.
-    - get_nowait()     raises Empty immediately if the queue is empty.
+    - put(item)       blocks until space is available
+    - get()           blocks until an item is available
+    - put_nowait()    raises Full immediately if no space
+    - get_nowait()    raises Empty immediately if no items
     """
 
-    def __init__(self, capacity: int) -> None:
+    def __init__(self, capacity: int):
         if capacity <= 0:
-            raise ValueError("capacity must be a positive integer")
+            raise ValueError("capacity must be > 0")
         self._capacity = capacity
-        self._buf: deque = deque()
+        self._buf: list = []
         self._lock = threading.Lock()
-        # Condition for "not full" — producers wait here
-        self._not_full = threading.Condition(self._lock)
-        # Condition for "not empty" — consumers wait here
+        # Signalled when an item is added (waiters: consumers)
         self._not_empty = threading.Condition(self._lock)
+        # Signalled when an item is removed (waiters: producers)
+        self._not_full = threading.Condition(self._lock)
 
-    # ---- blocking API ----
+    # ── core API ──────────────────────────────────────────────
 
-    def put(self, item: object) -> None:
-        """Add *item* to the queue, blocking until space is available."""
+    def put(self, item) -> None:
+        """Block until space is available, then enqueue *item*."""
         with self._not_full:
             while len(self._buf) >= self._capacity:
                 self._not_full.wait()
             self._buf.append(item)
             self._not_empty.notify()
 
-    def get(self) -> object:
-        """Remove and return the oldest item, blocking until one exists."""
+    def get(self):
+        """Block until an item is available, then dequeue and return it."""
         with self._not_empty:
-            while not self._buf:
+            while len(self._buf) == 0:
                 self._not_empty.wait()
-            item = self._buf.popleft()
+            item = self._buf.pop(0)
             self._not_full.notify()
             return item
 
-    # ---- non-blocking API ----
-
-    def put_nowait(self, item: object) -> None:
-        """Add *item* immediately or raise Full."""
+    def put_nowait(self, item) -> None:
+        """Enqueue *item* if space is available; otherwise raise Full."""
         with self._lock:
             if len(self._buf) >= self._capacity:
-                raise Full(
-                    f"queue is full (capacity={self._capacity})"
-                )
+                raise Full(f"queue is full (capacity={self._capacity})")
             self._buf.append(item)
             self._not_empty.notify()
 
-    def get_nowait(self) -> object:
-        """Remove and return the oldest item immediately or raise Empty."""
+    def get_nowait(self):
+        """Dequeue an item if one exists; otherwise raise Empty."""
         with self._lock:
-            if not self._buf:
+            if len(self._buf) == 0:
                 raise Empty("queue is empty")
-            item = self._buf.popleft()
+            item = self._buf.pop(0)
             self._not_full.notify()
             return item
 
-    # ---- introspection (all lock-protected) ----
+    # ── introspection (all thread-safe) ───────────────────────
 
     def qsize(self) -> int:
         with self._lock:

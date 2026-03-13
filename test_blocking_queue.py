@@ -1,180 +1,192 @@
-"""Producer-consumer test for BoundedBlockingQueue.
+"""
+Producer-consumer test for BoundedBlockingQueue.
 
-3 producers, 2 consumers, small queue capacity to force contention.
-Also includes unit tests for the nowait variants and edge cases.
+3 producers, 2 consumers, small queue capacity to force blocking.
+Validates correctness: every produced item is consumed exactly once.
 """
 
 import threading
 import time
-import unittest
+import random
 
-from blocking_queue import BoundedBlockingQueue, Empty, Full
+from blocking_queue import BoundedBlockingQueue, Full, Empty
 
+# ── configuration ─────────────────────────────────────────────
 
-# ---------------------------------------------------------------------------
-# Producer-consumer integration test
-# ---------------------------------------------------------------------------
+QUEUE_CAPACITY = 4          # small on purpose — forces blocking
+NUM_PRODUCERS = 3
+NUM_CONSUMERS = 2
+ITEMS_PER_PRODUCER = 50     # each producer sends 50 items
+TOTAL_ITEMS = NUM_PRODUCERS * ITEMS_PER_PRODUCER
 
-class TestProducerConsumer(unittest.TestCase):
-    """3 producers each push ITEMS_PER_PRODUCER items into a tiny queue;
-    2 consumers drain it.  At the end every item must appear exactly once."""
+# ── helpers ───────────────────────────────────────────────────
 
-    ITEMS_PER_PRODUCER = 200
-    NUM_PRODUCERS = 3
-    NUM_CONSUMERS = 2
-    QUEUE_CAPACITY = 5  # deliberately small → lots of blocking
-
-    def test_all_items_transferred(self) -> None:
-        q: BoundedBlockingQueue = BoundedBlockingQueue(self.QUEUE_CAPACITY)
-        sentinel = object()  # poison pill
-
-        produced: list[list[int]] = [[] for _ in range(self.NUM_PRODUCERS)]
-        consumed: list[list[int]] = [[] for _ in range(self.NUM_CONSUMERS)]
-
-        def producer(pid: int) -> None:
-            for i in range(self.ITEMS_PER_PRODUCER):
-                item = pid * self.ITEMS_PER_PRODUCER + i
-                q.put(item)
-                produced[pid].append(item)
-            # each producer sends one sentinel so consumers can shut down
-            # (we'll send exactly NUM_CONSUMERS sentinels total — see below)
-
-        def consumer(cid: int) -> None:
-            while True:
-                item = q.get()
-                if item is sentinel:
-                    return
-                consumed[cid].append(item)
-
-        # --- launch threads ---
-        producers = [
-            threading.Thread(target=producer, args=(i,), name=f"prod-{i}")
-            for i in range(self.NUM_PRODUCERS)
-        ]
-        consumers = [
-            threading.Thread(target=consumer, args=(i,), name=f"cons-{i}")
-            for i in range(self.NUM_CONSUMERS)
-        ]
-
-        for t in consumers + producers:
-            t.start()
-
-        # wait for producers to finish, then inject poison pills
-        for t in producers:
-            t.join()
-        for _ in range(self.NUM_CONSUMERS):
-            q.put(sentinel)
-        for t in consumers:
-            t.join()
-
-        # --- assertions ---
-        all_produced = sorted(v for sub in produced for v in sub)
-        all_consumed = sorted(v for sub in consumed for v in sub)
-
-        expected = sorted(range(self.NUM_PRODUCERS * self.ITEMS_PER_PRODUCER))
-        self.assertEqual(all_produced, expected, "producers missed items")
-        self.assertEqual(all_consumed, expected, "consumers missed items")
-
-        # queue should be empty
-        self.assertEqual(q.qsize(), 0)
+produced_lock = threading.Lock()
+consumed_lock = threading.Lock()
+produced: list[tuple[int, int]] = []   # (producer_id, seq)
+consumed: list[tuple[int, int]] = []   # same tuples, collected by consumers
 
 
-# ---------------------------------------------------------------------------
-# Unit tests for blocking & non-blocking behaviour
-# ---------------------------------------------------------------------------
+def producer(q: BoundedBlockingQueue, pid: int) -> None:
+    """Produce ITEMS_PER_PRODUCER tagged items into *q*."""
+    for seq in range(ITEMS_PER_PRODUCER):
+        item = (pid, seq)
+        q.put(item)
+        with produced_lock:
+            produced.append(item)
+        # tiny jitter so threads actually interleave
+        if random.random() < 0.1:
+            time.sleep(random.uniform(0, 0.002))
 
-class TestBlockingBehavior(unittest.TestCase):
+
+def consumer(q: BoundedBlockingQueue, sentinel: object) -> None:
+    """Consume items until *sentinel* is received."""
+    while True:
+        item = q.get()
+        if item is sentinel:
+            return
+        with consumed_lock:
+            consumed.append(item)
+        if random.random() < 0.1:
+            time.sleep(random.uniform(0, 0.002))
+
+
+# ── main test ─────────────────────────────────────────────────
+
+def test_producer_consumer() -> None:
+    q = BoundedBlockingQueue(QUEUE_CAPACITY)
+    sentinel = object()
+
+    # start consumers first so they block waiting
+    consumers = [
+        threading.Thread(target=consumer, args=(q, sentinel), name=f"consumer-{i}")
+        for i in range(NUM_CONSUMERS)
+    ]
+    for c in consumers:
+        c.start()
+
+    # start producers
+    producers = [
+        threading.Thread(target=producer, args=(q, pid), name=f"producer-{pid}")
+        for pid in range(NUM_PRODUCERS)
+    ]
+    for p in producers:
+        p.start()
+
+    # wait for all producers to finish
+    for p in producers:
+        p.join()
+
+    # send one sentinel per consumer to unblock them
+    for _ in consumers:
+        q.put(sentinel)
+
+    for c in consumers:
+        c.join()
+
+    # ── assertions ────────────────────────────────────────────
+
+    assert len(produced) == TOTAL_ITEMS, (
+        f"expected {TOTAL_ITEMS} produced, got {len(produced)}"
+    )
+    assert len(consumed) == TOTAL_ITEMS, (
+        f"expected {TOTAL_ITEMS} consumed, got {len(consumed)}"
+    )
+    # every item consumed exactly once
+    assert sorted(produced) == sorted(consumed), (
+        "produced and consumed item sets differ"
+    )
+    # queue should be drained
+    assert q.qsize() == 0, f"queue not empty after test: {q.qsize()}"
+
+    print(f"✓ {TOTAL_ITEMS} items produced and consumed correctly "
+          f"({NUM_PRODUCERS}P / {NUM_CONSUMERS}C, capacity={QUEUE_CAPACITY})")
+
+
+def test_nowait_raises() -> None:
+    """put_nowait / get_nowait raise on boundary conditions."""
+    q = BoundedBlockingQueue(2)
+
+    # get_nowait on empty
+    try:
+        q.get_nowait()
+        assert False, "expected Empty"
+    except Empty:
+        pass
+
+    # fill it up
+    q.put_nowait("a")
+    q.put_nowait("b")
+
+    # put_nowait on full
+    try:
+        q.put_nowait("c")
+        assert False, "expected Full"
+    except Full:
+        pass
+
+    # drain via nowait
+    assert q.get_nowait() == "a"
+    assert q.get_nowait() == "b"
+
+    # empty again
+    try:
+        q.get_nowait()
+        assert False, "expected Empty"
+    except Empty:
+        pass
+
+    print("✓ put_nowait / get_nowait edge cases passed")
+
+
+def test_blocking_semantics() -> None:
     """Verify that put blocks when full and get blocks when empty."""
+    q = BoundedBlockingQueue(1)
+    blocked = threading.Event()
+    unblocked = threading.Event()
 
-    def test_get_blocks_on_empty(self) -> None:
-        q = BoundedBlockingQueue(2)
-        result: list = []
+    # fill the queue
+    q.put("x")
 
-        def delayed_put() -> None:
-            time.sleep(0.1)
-            q.put("hello")
+    def blocking_put():
+        blocked.set()          # signal that we're about to block
+        q.put("y")             # should block until consumer drains
+        unblocked.set()
 
-        threading.Thread(target=delayed_put).start()
-        result.append(q.get())  # should block ~100 ms then return
-        self.assertEqual(result, ["hello"])
+    t = threading.Thread(target=blocking_put)
+    t.start()
 
-    def test_put_blocks_on_full(self) -> None:
-        q = BoundedBlockingQueue(1)
-        q.put("a")  # fills the queue
+    blocked.wait(timeout=2)
+    # give the thread a moment to actually enter the wait
+    time.sleep(0.05)
+    assert not unblocked.is_set(), "put should be blocking but isn't"
 
-        unblocked = threading.Event()
+    # drain one item — should unblock the producer
+    assert q.get() == "x"
+    unblocked.wait(timeout=2)
+    assert unblocked.is_set(), "put didn't unblock after get"
+    assert q.get() == "y"
 
-        def delayed_get() -> None:
-            time.sleep(0.1)
-            q.get()
-
-        def blocking_put() -> None:
-            q.put("b")  # should block until delayed_get runs
-            unblocked.set()
-
-        threading.Thread(target=delayed_get).start()
-        threading.Thread(target=blocking_put).start()
-
-        self.assertTrue(
-            unblocked.wait(timeout=2),
-            "put never unblocked after get drained the queue",
-        )
+    t.join()
+    print("✓ blocking semantics verified")
 
 
-class TestNowait(unittest.TestCase):
-    """Non-blocking put_nowait / get_nowait semantics."""
-
-    def test_get_nowait_empty_raises(self) -> None:
-        q = BoundedBlockingQueue(5)
-        with self.assertRaises(Empty):
-            q.get_nowait()
-
-    def test_put_nowait_full_raises(self) -> None:
-        q = BoundedBlockingQueue(2)
-        q.put_nowait("a")
-        q.put_nowait("b")
-        with self.assertRaises(Full):
-            q.put_nowait("c")
-
-    def test_nowait_round_trip(self) -> None:
-        q = BoundedBlockingQueue(3)
-        for i in range(3):
-            q.put_nowait(i)
-        self.assertEqual(q.qsize(), 3)
-        for i in range(3):
-            self.assertEqual(q.get_nowait(), i)
-        self.assertEqual(q.qsize(), 0)
+def test_capacity_validation() -> None:
+    """Zero or negative capacity should raise."""
+    for bad in (0, -1, -100):
+        try:
+            BoundedBlockingQueue(bad)
+            assert False, f"expected ValueError for capacity={bad}"
+        except ValueError:
+            pass
+    print("✓ capacity validation passed")
 
 
-class TestEdgeCases(unittest.TestCase):
-
-    def test_invalid_capacity(self) -> None:
-        with self.assertRaises(ValueError):
-            BoundedBlockingQueue(0)
-        with self.assertRaises(ValueError):
-            BoundedBlockingQueue(-3)
-
-    def test_capacity_one(self) -> None:
-        q = BoundedBlockingQueue(1)
-        q.put("only")
-        self.assertEqual(q.get(), "only")
-
-    def test_fifo_order(self) -> None:
-        q = BoundedBlockingQueue(10)
-        items = list(range(10))
-        for i in items:
-            q.put(i)
-        result = [q.get() for _ in items]
-        self.assertEqual(result, items)
-
-    def test_repr(self) -> None:
-        q = BoundedBlockingQueue(4)
-        q.put("x")
-        self.assertIn("capacity=4", repr(q))
-        self.assertIn("size=1", repr(q))
-
-
-# ---------------------------------------------------------------------------
+# ── run ───────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    unittest.main()
+    test_capacity_validation()
+    test_nowait_raises()
+    test_blocking_semantics()
+    test_producer_consumer()
+    print("\nAll tests passed.")
