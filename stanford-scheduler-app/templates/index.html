@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stanford Course Scheduler | Autumn 2025-26</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <span class="logo-icon">🎓</span>
+                <div>
+                    <h1>Stanford Course Scheduler</h1>
+                    <p class="subtitle">GSB MBA × MS CS — Autumn 2025-26 — AI-Centric Courses</p>
+                </div>
+            </div>
+            <div class="schedule-summary" id="scheduleSummary">
+                <span class="unit-count"><span id="totalUnits">0</span> units</span>
+                <span class="course-count"><span id="courseCount">0</span> courses</span>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- Search Section -->
+        <section class="search-section">
+            <div class="search-bar">
+                <input type="text" id="searchInput"
+                       placeholder='Try: "machine learning courses on Tuesdays" or "NLP" or "CS 229"'
+                       autocomplete="off">
+                <button id="searchBtn">Search</button>
+            </div>
+            <div class="filter-chips" id="filterChips">
+                <span class="chip-label">Filter:</span>
+                <button class="chip" data-dept="CS">CS</button>
+                <button class="chip" data-dept="EE">EE</button>
+                <button class="chip" data-dept="MS&E">MS&E</button>
+                <button class="chip" data-dept="STATS">STATS</button>
+                <button class="chip" data-dept="OIT">OIT</button>
+                <button class="chip" data-dept="STRAMGT">STRAMGT</button>
+                <button class="chip" data-dept="GSBGEN">GSBGEN</button>
+                <button class="chip" data-dept="FINANCE">FINANCE</button>
+                <button class="chip" data-dept="MKTG">MKTG</button>
+                <span class="chip-divider">|</span>
+                <button class="chip day-chip" data-days="Mon">Mon</button>
+                <button class="chip day-chip" data-days="Tue">Tue</button>
+                <button class="chip day-chip" data-days="Wed">Wed</button>
+                <button class="chip day-chip" data-days="Thu">Thu</button>
+                <button class="chip day-chip" data-days="Fri">Fri</button>
+                <span class="chip-divider">|</span>
+                <button class="chip" id="clearFilters">Clear All</button>
+            </div>
+        </section>
+
+        <div class="content-grid">
+            <!-- Left: Course Results & Recommendations -->
+            <div class="left-panel">
+                <!-- Tab navigation -->
+                <div class="tab-nav">
+                    <button class="tab active" data-tab="search">Search Results</button>
+                    <button class="tab" data-tab="recommendations">Recommended for You</button>
+                </div>
+
+                <!-- Search Results -->
+                <div class="tab-content active" id="searchTab">
+                    <div class="results-header">
+                        <span id="resultCount">0 courses found</span>
+                    </div>
+                    <div class="course-list" id="courseList"></div>
+                </div>
+
+                <!-- Recommendations -->
+                <div class="tab-content" id="recommendationsTab">
+                    <div class="rec-intro">
+                        <p>Curated AI/ML course picks for a GSB MBA student doing concurrent MS in CS.</p>
+                    </div>
+                    <div id="recommendationsList"></div>
+                </div>
+            </div>
+
+            <!-- Right: My Schedule -->
+            <div class="right-panel">
+                <div class="schedule-panel">
+                    <h2>My Schedule</h2>
+                    <div class="conflict-banner" id="conflictBanner" style="display:none;">
+                        <span>⚠️ Time conflicts detected!</span>
+                        <div id="conflictDetails"></div>
+                    </div>
+                    <div class="schedule-courses" id="scheduleCourses">
+                        <div class="empty-schedule">
+                            <p>No courses added yet.</p>
+                            <p class="hint">Search and click "Add to Schedule" to build your plan.</p>
+                        </div>
+                    </div>
+                    <div class="calendar-view">
+                        <h3>Weekly Calendar</h3>
+                        <div class="calendar-grid" id="calendarGrid">
+                            <div class="cal-header">
+                                <div class="cal-time-header"></div>
+                                <div class="cal-day-header">Mon</div>
+                                <div class="cal-day-header">Tue</div>
+                                <div class="cal-day-header">Wed</div>
+                                <div class="cal-day-header">Thu</div>
+                                <div class="cal-day-header">Fri</div>
+                            </div>
+                            <div class="cal-body" id="calBody"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
