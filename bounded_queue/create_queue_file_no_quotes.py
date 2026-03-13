@@ -1,4 +1,7 @@
+import os
 
+# Define the content as a string without triple quotes
+content = '''
 Thread-safe bounded blocking queue implementation using only threading primitives.
 No queue.Queue allowed.
 
@@ -79,4 +82,13 @@ class BoundedBlockingQueue:
     
     def full(self):
         with self._mutex:
-            return len(self.queue) >= self.maxsize
+            return len(self.queue) >= self.maxsize'''
+
+# Create the directory if it doesn't exist
+os.makedirs(os.path.expanduser("~/jax-sandbox/bounded_queue"), exist_ok=True)
+
+# Write the content to the file
+with open(os.path.expanduser("~/jax-sandbox/bounded_queue/bounded_queue.py"), "w") as f:
+    f.write(content)
+
+print("bounded_queue.py created successfully!")"""}}
