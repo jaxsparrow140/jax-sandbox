@@ -1,28 +1,26 @@
 """
-Calculate R-squared (coefficient of determination) without sklearn or numpy.
+Calculate R-squared value from scratch without sklearn or numpy.
 
-R-squared measures how well the predicted values explain the variation in actual values.
-Formula: R² = 1 - (SS_res / SS_tot)
-where:
-  SS_res = sum of squared residuals = Σ(y_actual - y_pred)²
-  SS_tot = total sum of squares = Σ(y_actual - y_mean)²
+R-squared = 1 - (SS_res / SS_tot)
+where SS_res = sum of squared residuals
+      SS_tot = total sum of squares
 """
 
-
-def calculate_r_squared(actual: list[float], predicted: list[float]) -> float:
+def r_squared(actual, predicted):
     """
-    Calculate R-squared value given actual and predicted values.
+    Calculate the R-squared value given two lists of actual and predicted values.
     
     Args:
-        actual: List of actual/observed values
+        actual: List of actual values
         predicted: List of predicted values
-    
+        
     Returns:
-        R-squared value (float between 0 and 1 for good fits, can be negative)
-    
+        float: R-squared value between 0 and 1 (higher is better)
+        
     Raises:
-        ValueError: If lists are empty, have different lengths, or SS_tot is zero
+        ValueError: If lists have different lengths or are empty
     """
+    # Check if lists have the same length and are not empty
     if len(actual) != len(predicted):
         raise ValueError("Actual and predicted lists must have the same length")
     
@@ -30,38 +28,48 @@ def calculate_r_squared(actual: list[float], predicted: list[float]) -> float:
         raise ValueError("Lists cannot be empty")
     
     # Calculate mean of actual values
-    n = len(actual)
-    actual_mean = sum(actual) / n
+    mean_actual = sum(actual) / len(actual)
     
-    # Calculate SS_res (sum of squared residuals)
-    ss_res = sum((a - p) ** 2 for a, p in zip(actual, predicted))
+    # Calculate sum of squared residuals (SS_res)
+    ss_res = sum((actual[i] - predicted[i]) ** 2 for i in range(len(actual)))
     
-    # Calculate SS_tot (total sum of squares)
-    ss_tot = sum((a - actual_mean) ** 2 for a in actual)
+    # Calculate total sum of squares (SS_tot)
+    ss_tot = sum((actual[i] - mean_actual) ** 2 for i in range(len(actual)))
     
+    # Handle edge case where SS_tot is 0 (all actual values are the same)
     if ss_tot == 0:
-        raise ValueError("SS_tot is zero - all actual values are identical")
+        return 1.0 if ss_res == 0 else 0.0
     
-    # R² = 1 - (SS_res / SS_tot)
-    r_squared = 1 - (ss_res / ss_tot)
+    # Calculate R-squared
+    r2 = 1 - (ss_res / ss_tot)
     
-    return r_squared
+    return r2
 
-
+# Example usage (for testing)
 if __name__ == "__main__":
-    # Test with simple example
-    actual = [1.0, 2.0, 3.0, 4.0, 5.0]
-    predicted = [1.1, 2.1, 2.9, 4.2, 4.8]
+    # Test with sample data
+    actual_values = [3, -0.5, 2, 7]
+    predicted_values = [2.5, 0.0, 2, 8]
     
-    r2 = calculate_r_squared(actual, predicted)
-    print(f"R-squared: {r2:.4f}")
+    result = r_squared(actual_values, predicted_values)
+    print(f"Actual: {actual_values}")
+    print(f"Predicted: {predicted_values}")
+    print(f"R-squared: {result:.4f}")
     
-    # Perfect fit test
-    perfect = [1.0, 2.0, 3.0, 4.0, 5.0]
-    r2_perfect = calculate_r_squared(actual, perfect)
-    print(f"Perfect fit R-squared: {r2_perfect:.4f}")
+    # Test with identical values (should be 1.0)
+    actual_values2 = [1, 2, 3, 4, 5]
+    predicted_values2 = [1, 2, 3, 4, 5]
+    result2 = r_squared(actual_values2, predicted_values2)
+    print(f"\nIdentical values test:")
+    print(f"Actual: {actual_values2}")
+    print(f"Predicted: {predicted_values2}")
+    print(f"R-squared: {result2:.4f}")
     
-    # Poor fit test
-    poor = [5.0, 4.0, 3.0, 2.0, 1.0]
-    r2_poor = calculate_r_squared(actual, poor)
-    print(f"Poor fit R-squared: {r2_poor:.4f}")
+    # Test with constant actual values (should be 0.0 if predictions are wrong)
+    actual_values3 = [2, 2, 2, 2]
+    predicted_values3 = [1, 3, 1, 3]
+    result3 = r_squared(actual_values3, predicted_values3)
+    print(f"\nConstant actual values test:")
+    print(f"Actual: {actual_values3}")
+    print(f"Predicted: {predicted_values3}")
+    print(f"R-squared: {result3:.4f}")
