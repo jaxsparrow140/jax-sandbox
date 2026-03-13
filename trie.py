@@ -80,24 +80,24 @@ if __name__ == "__main__":
     trie.insert("appreciate")
     
     # Test search
-    print(f"Search 'app': {trie.search('app')}"))
-    print(f"Search 'apple': {trie.search('apple')}"))
-    print(f"Search 'appl': {trie.search('appl')}"))
+    print(f"Search 'app': {trie.search('app')}")
+    print(f"Search 'apple': {trie.search('apple')}")
+    print(f"Search 'appl': {trie.search('appl')}")
     
     # Test starts_with
-    print(f"Starts with 'app': {trie.starts_with('app')}"))
-    print(f"Starts with 'appl': {trie.starts_with('appl')}"))
-    print(f"Starts with 'banana': {trie.starts_with('banana')}"))
+    print(f"Starts with 'app': {trie.starts_with('app')}")
+    print(f"Starts with 'appl': {trie.starts_with('appl')}")
+    print(f"Starts with 'banana': {trie.starts_with('banana')}")
     
     # Test delete
     trie.delete("app")
-    print(f"After deleting 'app', search 'app': {trie.search('app')}"))
-    print(f"After deleting 'app', starts with 'app': {trie.starts_with('app')}"))
+    print(f"After deleting 'app', search 'app': {trie.search('app')}")
+    print(f"After deleting 'app', starts with 'app': {trie.starts_with('app')}")
     
     # Test delete with shared prefix
     trie.delete("apple")
-    print(f"After deleting 'apple', search 'app': {trie.search('app')}"))
-    print(f"After deleting 'apple', starts with 'app': {trie.starts_with('app')}"))
+    print(f"After deleting 'apple', search 'app': {trie.search('app')}")
+    print(f"After deleting 'apple', starts with 'app': {trie.starts_with('app')}")
     
     # Test delete non-existent word
     result = trie.delete("banana")
