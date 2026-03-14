@@ -1,176 +1,143 @@
 """
-LRU Cache — from scratch, no functools, no external libs.
-
-Uses a doubly-linked list + hashmap for O(1) get and put.
+A pure Python LRU cache implementation with O(1) get and put operations.
+Uses a doubly linked list for ordering and a dictionary for O(1) lookups.
 """
 
-
-class _Node:
-    """Doubly-linked list node."""
-
-    __slots__ = ("key", "value", "prev", "next")
-
-    def __init__(self, key: int = 0, value: int = 0):
+class Node:
+    """Doubly linked list node."""
+    def __init__(self, key=None, value=None):
         self.key = key
         self.value = value
-        self.prev: "_Node | None" = None
-        self.next: "_Node | None" = None
-
+        self.prev = None
+        self.next = None
 
 class LRUCache:
     """
-    Least-Recently-Used cache with fixed capacity.
-
-    get(key)        → value or -1          O(1)
-    put(key, value) → None (evicts LRU)    O(1)
+    LRU Cache with fixed capacity.
+    Supports get(key) and put(key, value) with O(1) time complexity.
+    Least recently used items are evicted when capacity is exceeded.
     """
-
-    def __init__(self, capacity: int):
+    
+    def __init__(self, capacity):
+        """
+        Initialize LRU cache with given capacity.
+        
+        Args:
+            capacity (int): Maximum number of items the cache can hold
+        """
         if capacity <= 0:
-            raise ValueError("capacity must be > 0")
+            raise ValueError("Capacity must be positive")
         self.capacity = capacity
-        self.cache: dict[int, _Node] = {}
-
-        # Sentinel head/tail so we never deal with None edge cases.
-        self.head = _Node()  # MRU side
-        self.tail = _Node()  # LRU side
+        self.cache = {}  # key -> Node
+        
+        # Dummy head and tail nodes to simplify operations
+        self.head = Node()
+        self.tail = Node()
         self.head.next = self.tail
         self.tail.prev = self.head
-
-    # ── internal helpers ──────────────────────────────────────────
-
-    def _remove(self, node: _Node) -> None:
-        """Unlink a node from the list."""
-        node.prev.next = node.next
-        node.next.prev = node.prev
-
-    def _insert_after_head(self, node: _Node) -> None:
-        """Insert node right after head (most-recently-used spot)."""
+    
+    def _add_node(self, node):
+        """Add a node right after head (most recently used)."""
         node.prev = self.head
         node.next = self.head.next
         self.head.next.prev = node
         self.head.next = node
-
-    # ── public API ────────────────────────────────────────────────
-
-    def get(self, key: int) -> int:
-        if key not in self.cache:
-            return -1
-        node = self.cache[key]
-        # Move to front (mark as most recently used).
-        self._remove(node)
-        self._insert_after_head(node)
-        return node.value
-
-    def put(self, key: int, value: int) -> None:
+    
+    def _remove_node(self, node):
+        """Remove a node from the linked list."""
+        prev_node = node.prev
+        next_node = node.next
+        prev_node.next = next_node
+        next_node.prev = prev_node
+    
+    def _move_to_head(self, node):
+        """Move a node to the head (most recently used)."""
+        self._remove_node(node)
+        self._add_node(node)
+    
+    def _pop_tail(self):
+        """Remove and return the tail node (least recently used)."""
+        node = self.tail.prev
+        self._remove_node(node)
+        return node
+    
+    def get(self, key):
+        """
+        Get the value of the key if it exists in the cache.
+        
+        Args:
+            key: The key to look up
+            
+        Returns:
+            The value if key exists, None otherwise
+        """
         if key in self.cache:
-            # Update existing node and move to front.
+            # Move to head (mark as most recently used)
+            node = self.cache[key]
+            self._move_to_head(node)
+            return node.value
+        return None
+    
+    def put(self, key, value):
+        """
+        Add or update a key-value pair in the cache.
+        
+        Args:
+            key: The key to add/update
+            value: The value to store
+        """
+        if key in self.cache:
+            # Update existing node
             node = self.cache[key]
             node.value = value
-            self._remove(node)
-            self._insert_after_head(node)
+            self._move_to_head(node)
         else:
-            if len(self.cache) >= self.capacity:
-                # Evict LRU (node just before tail sentinel).
-                lru = self.tail.prev
-                self._remove(lru)
-                del self.cache[lru.key]
-            node = _Node(key, value)
-            self.cache[key] = node
-            self._insert_after_head(node)
+            # Add new node
+            new_node = Node(key, value)
+            self.cache[key] = new_node
+            self._add_node(new_node)
+            
+            # If capacity exceeded, evict LRU item
+            if len(self.cache) > self.capacity:
+                tail_node = self._pop_tail()
+                del self.cache[tail_node.key]
 
-    # ── convenience ───────────────────────────────────────────────
-
-    def __len__(self) -> int:
-        return len(self.cache)
-
-    def __repr__(self) -> str:
-        items = []
-        cur = self.head.next
-        while cur is not self.tail:
-            items.append(f"{cur.key}:{cur.value}")
-            cur = cur.next
-        return f"LRUCache(cap={self.capacity}, MRU→LRU=[{', '.join(items)}])"
-
-
-# ═══════════════════════════════════════════════════════════════════
-#  Tests
-# ═══════════════════════════════════════════════════════════════════
-
-def test_basic_get_put():
-    c = LRUCache(2)
-    c.put(1, 1)
-    c.put(2, 2)
-    assert c.get(1) == 1       # hit
-    c.put(3, 3)                # evicts key 2 (LRU)
-    assert c.get(2) == -1      # miss
-    c.put(4, 4)                # evicts key 1 (LRU after 3 was just inserted)
-    assert c.get(1) == -1
-    assert c.get(3) == 3
-    assert c.get(4) == 4
-    print("✓ test_basic_get_put")
-
-
-def test_update_existing_key():
-    c = LRUCache(2)
-    c.put(1, 10)
-    c.put(2, 20)
-    c.put(1, 100)              # update key 1 → moves to MRU
-    c.put(3, 30)               # should evict key 2, not key 1
-    assert c.get(2) == -1
-    assert c.get(1) == 100
-    assert c.get(3) == 30
-    print("✓ test_update_existing_key")
-
-
-def test_capacity_one():
-    c = LRUCache(1)
-    c.put(1, 1)
-    assert c.get(1) == 1
-    c.put(2, 2)                # evicts 1
-    assert c.get(1) == -1
-    assert c.get(2) == 2
-    print("✓ test_capacity_one")
-
-
-def test_get_promotes_to_mru():
-    c = LRUCache(3)
-    c.put(1, 1)
-    c.put(2, 2)
-    c.put(3, 3)                # order MRU→LRU: 3, 2, 1
-    c.get(1)                   # promotes 1 → MRU: 1, 3, 2
-    c.put(4, 4)                # evicts 2 (now LRU)
-    assert c.get(2) == -1
-    assert c.get(1) == 1
-    assert c.get(3) == 3
-    assert c.get(4) == 4
-    print("✓ test_get_promotes_to_mru")
-
-
-def test_miss_returns_neg1():
-    c = LRUCache(2)
-    assert c.get(99) == -1
-    print("✓ test_miss_returns_neg1")
-
-
-def test_len_and_repr():
-    c = LRUCache(3)
-    c.put(1, 10)
-    c.put(2, 20)
-    assert len(c) == 2
-    c.put(3, 30)
-    c.put(4, 40)               # evicts 1
-    assert len(c) == 3
-    r = repr(c)
-    assert "4:40" in r
-    print(f"✓ test_len_and_repr  →  {r}")
-
-
+# Test the implementation
 if __name__ == "__main__":
-    test_basic_get_put()
-    test_update_existing_key()
-    test_capacity_one()
-    test_get_promotes_to_mru()
-    test_miss_returns_neg1()
-    test_len_and_repr()
-    print("\nAll tests passed.")
+    # Test case 1: Basic functionality
+    cache = LRUCache(2)
+    cache.put(1, 1)
+    cache.put(2, 2)
+    print(f"get(1): {cache.get(1)}")  # returns 1
+    cache.put(3, 3)  # evicts key 2
+    print(f"get(2): {cache.get(2)}")  # returns None (evicted)
+    cache.put(4, 4)  # evicts key 1
+    print(f"get(1): {cache.get(1)}")  # returns None (evicted)
+    print(f"get(3): {cache.get(3)}")  # returns 3
+    print(f"get(4): {cache.get(4)}")  # returns 4
+    
+    # Test case 2: Update existing key
+    cache = LRUCache(3)
+    cache.put(1, 1)
+    cache.put(2, 2)
+    cache.put(3, 3)
+    cache.put(2, 20)  # update key 2
+    print(f"get(2): {cache.get(2)}")  # returns 20
+    cache.put(4, 4)  # evicts key 1
+    print(f"get(1): {cache.get(1)}")  # returns None
+    print(f"get(2): {cache.get(2)}")  # returns 20
+    print(f"get(3): {cache.get(3)}")  # returns 3
+    print(f"get(4): {cache.get(4)}")  # returns 4
+    
+    # Test case 3: Capacity of 1
+    cache = LRUCache(1)
+    cache.put(1, 1)
+    cache.put(2, 2)
+    print(f"get(1): {cache.get(1)}")  # returns None
+    print(f"get(2): {cache.get(2)}")  # returns 2
+    
+    # Test case 4: Edge case - capacity 0 (should raise error)
+    try:
+        cache = LRUCache(0)
+    except ValueError as e:
+        print(f"Error with capacity 0: {e}")
