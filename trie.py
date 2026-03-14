@@ -122,4 +122,7 @@ if __name__ == "__main__":
     print("Starts with 'ban':", trie.starts_with("ban"))  # False (no words left starting with 'ban')
     
     print("All tests completed.")
+<<<<<<< HEAD
 
+=======
+>>>>>>> 0cc4177ab492f11c80e835124fef75be2b2e55db

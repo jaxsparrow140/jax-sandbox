@@ -1,0 +1,723 @@
+"""
+Stanford ExploreCourses scraper with local JSON caching.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import time
+from urllib.parse import quote_plus
+from typing import Optional
+
+import requests
+from bs4 import BeautifulSoup
+
+CACHE_FILE = os.path.join(os.path.dirname(__file__), "courses_cache.json")
+BASE_URL = "https://explorecourses.stanford.edu/search"
+
+SEARCH_TERMS = [
+    "artificial intelligence",
+    "machine learning",
+    "deep learning",
+    "natural language processing",
+    "computer vision",
+    "data science",
+    "reinforcement learning",
+    "generative AI",
+    "large language models",
+    "neural networks",
+    "AI ethics",
+    "robotics",
+]
+
+SPECIFIC_COURSES = [
+    "CS 229", "CS 230", "CS 231", "CS 224", "CS 234", "CS 236", "CS 238",
+    "CS 330", "CS 221", "CS 228", "MS&E 226", "MS&E 338", "MS&E 234",
+    "STATS 315", "EE 364", "OIT 367", "STRAMGT 351", "GSBGEN 566",
+]
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) "
+                  "Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+}
+
+
+def scrape_courses(query: str, max_pages: int = 3) -> list[dict]:
+    """Scrape courses from ExploreCourses for a given query."""
+    courses = []
+    for page in range(max_pages):
+        params = {
+            "view": "catalog",
+            "filter-coursestatus-Active": "on",
+            "page": str(page),
+            "q": query,
+            "collapse": "",
+            "filter-term-Autumn": "on",
+        }
+        try:
+            resp = requests.get(BASE_URL, params=params, headers=HEADERS, timeout=15)
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            print(f"  Request failed for '{query}' page {page}: {e}")
+            break
+
+        soup = BeautifulSoup(resp.text, "lxml")
+        course_rows = soup.select(".searchResult")
+        if not course_rows:
+            break
+
+        for row in course_rows:
+            course = parse_course_row(row)
+            if course:
+                courses.append(course)
+
+        time.sleep(0.5)  # be polite
+    return courses
+
+
+def parse_course_row(row) -> dict | None:
+    """Parse a single course row from ExploreCourses HTML."""
+    try:
+        title_el = row.select_one(".courseTitle") or row.select_one("h2") or row.select_one("h3")
+        if not title_el:
+            return None
+
+        title_text = title_el.get_text(strip=True)
+        # Try to split "CS 229: Machine Learning" style
+        code, title = "", title_text
+        code_match = re.match(r'^([A-Z&]+\s*\d+\w*)\s*[:.\-]\s*(.*)', title_text)
+        if code_match:
+            code = code_match.group(1).strip()
+            title = code_match.group(2).strip()
+
+        # Also look for course number in a separate element
+        code_el = row.select_one(".courseNumber") or row.select_one(".courseCode")
+        if code_el:
+            code = code_el.get_text(strip=True)
+
+        desc_el = row.select_one(".courseDescription") or row.select_one(".description")
+        description = desc_el.get_text(strip=True) if desc_el else ""
+
+        units_el = row.select_one(".courseAttributes") or row.select_one(".units")
+        units_text = units_el.get_text(strip=True) if units_el else ""
+        units_match = re.search(r'(\d+(?:-\d+)?)\s*unit', units_text, re.I)
+        units = units_match.group(1) if units_match else ""
+
+        # Schedule info
+        schedule_el = row.select_one(".sectionSchedule") or row.select_one(".schedule")
+        schedule = schedule_el.get_text(strip=True) if schedule_el else ""
+
+        instructor_el = row.select_one(".instructor") or row.select_one(".instructorLink")
+        instructor = instructor_el.get_text(strip=True) if instructor_el else ""
+
+        dept = ""
+        if code:
+            dept_match = re.match(r'^([A-Z&]+)', code)
+            if dept_match:
+                dept = dept_match.group(1)
+
+        return {
+            "code": code,
+            "title": title,
+            "description": description[:500],
+            "units": units,
+            "schedule": schedule,
+            "instructor": instructor,
+            "department": dept,
+        }
+    except Exception as e:
+        print(f"  Parse error: {e}")
+        return None
+
+
+def run_scraper() -> list[dict]:
+    """Run full scrape across all search terms and specific courses."""
+    all_courses = {}
+
+    print("Scraping ExploreCourses...")
+    for term in SEARCH_TERMS:
+        print(f"  Searching: {term}")
+        courses = scrape_courses(term)
+        for c in courses:
+            key = c["code"] or c["title"]
+            if key and key not in all_courses:
+                all_courses[key] = c
+
+    for course_id in SPECIFIC_COURSES:
+        print(f"  Searching: {course_id}")
+        courses = scrape_courses(course_id)
+        for c in courses:
+            key = c["code"] or c["title"]
+            if key and key not in all_courses:
+                all_courses[key] = c
+
+    result = list(all_courses.values())
+    print(f"Scraped {len(result)} unique courses")
+    return result
+
+
+def load_static_fallback() -> list[dict]:
+    """Comprehensive static dataset of real Stanford AI/ML courses."""
+    return [
+        {
+            "code": "CS 221",
+            "title": "Artificial Intelligence: Principles and Techniques",
+            "description": "Principles and techniques of artificial intelligence. Topics include search, game playing, knowledge representation, inference, planning, reasoning under uncertainty, machine learning, robotics, perception, and language understanding.",
+            "units": "3-4",
+            "schedule": "Mon, Wed, Fri 1:30-2:50 PM",
+            "instructor": "Percy Liang",
+            "department": "CS"
+        },
+        {
+            "code": "CS 224N",
+            "title": "Natural Language Processing with Deep Learning",
+            "description": "Methods for processing human language information and the underlying computational properties of natural languages. Focus on deep learning approaches: word vectors, neural network models for NLP, syntactic analysis, neural machine translation, attention models, and transformers.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 1:30-2:50 PM",
+            "instructor": "Christopher Manning",
+            "department": "CS"
+        },
+        {
+            "code": "CS 224W",
+            "title": "Machine Learning with Graphs",
+            "description": "Machine learning techniques and data mining tools applicable to large-scale graph data. Node embeddings, Graph Neural Networks, knowledge graphs, deep generative models for graphs. Applications in social networks, biology, medicine, and information networks.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 10:30-11:50 AM",
+            "instructor": "Jure Leskovec",
+            "department": "CS"
+        },
+        {
+            "code": "CS 224U",
+            "title": "Natural Language Understanding",
+            "description": "Topics in natural language understanding with an emphasis on semantic interpretation. Examination of how language is used and how computational models can be used to understand language. Covers grounding, contextual representations, and evaluation methodology.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 3:00-4:20 PM",
+            "instructor": "Christopher Potts",
+            "department": "CS"
+        },
+        {
+            "code": "CS 224S",
+            "title": "Spoken Language Processing",
+            "description": "Introduction to spoken language technology with an emphasis on dialogue and conversational systems. Automatic speech recognition, speech synthesis, dialogue management, and spoken language understanding.",
+            "units": "2-4",
+            "schedule": "Mon, Wed 3:00-4:20 PM",
+            "instructor": "Dan Jurafsky",
+            "department": "CS"
+        },
+        {
+            "code": "CS 228",
+            "title": "Probabilistic Graphical Models: Principles and Techniques",
+            "description": "Probabilistic graphical models are a powerful framework for representing complex domains using probability distributions. Bayesian networks, Markov random fields, and their temporal extensions. Exact and approximate inference algorithms.",
+            "units": "3-4",
+            "schedule": "Mon, Wed 10:30-11:50 AM",
+            "instructor": "Stefano Ermon",
+            "department": "CS"
+        },
+        {
+            "code": "CS 229",
+            "title": "Machine Learning",
+            "description": "Topics include supervised learning, unsupervised learning, learning theory, reinforcement learning, and adaptive control. Recent applications of machine learning such as robotic control, data mining, autonomous navigation, bioinformatics, speech recognition, and text processing.",
+            "units": "3-4",
+            "schedule": "Mon, Wed 1:30-2:50 PM",
+            "instructor": "Andrew Ng, Tengyu Ma",
+            "department": "CS"
+        },
+        {
+            "code": "CS 230",
+            "title": "Deep Learning",
+            "description": "Deep learning is a subfield of machine learning. This course covers the foundations of deep learning, understand the challenges of neural networks, and learn about CNN, RNN, LSTM, Adam, Dropout, BatchNorm, and more. Projects using TensorFlow.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 10:30-11:50 AM",
+            "instructor": "Andrew Ng",
+            "department": "CS"
+        },
+        {
+            "code": "CS 231N",
+            "title": "Deep Learning for Computer Vision",
+            "description": "Computer vision has become ubiquitous in our society. This course is a deep dive into the details of neural-network based deep learning methods for computer vision. Convolutional neural networks, recurrent networks, generative adversarial networks, and transformers.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 1:30-2:50 PM",
+            "instructor": "Fei-Fei Li",
+            "department": "CS"
+        },
+        {
+            "code": "CS 231A",
+            "title": "Computer Vision: From 3D Reconstruction to Recognition",
+            "description": "An introduction to the concepts and techniques of computer vision. Topics include cameras and projection models, 3D reconstruction, feature detection, image segmentation, object recognition, and scene understanding.",
+            "units": "3-4",
+            "schedule": "Mon, Wed 1:30-2:50 PM",
+            "instructor": "Silvio Savarese",
+            "department": "CS"
+        },
+        {
+            "code": "CS 234",
+            "title": "Reinforcement Learning",
+            "description": "Exploration of sequential decision making under uncertainty. Topics include Markov decision processes, exact methods (value and policy iteration), and approximate methods (on-policy and off-policy methods, deep RL, policy gradient, model-based RL).",
+            "units": "3-4",
+            "schedule": "Mon, Wed 3:00-4:20 PM",
+            "instructor": "Emma Brunskill",
+            "department": "CS"
+        },
+        {
+            "code": "CS 236",
+            "title": "Deep Generative Models",
+            "description": "Generative models are widely used in many subfields of AI and machine learning. This course covers VAEs, GANs, autoregressive models, normalizing flows, energy-based models, score-based models, and diffusion models.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 3:00-4:20 PM",
+            "instructor": "Stefano Ermon",
+            "department": "CS"
+        },
+        {
+            "code": "CS 238",
+            "title": "Decision Making Under Uncertainty",
+            "description": "Computational methods for making rational decisions in uncertain and dynamic environments. Bayesian networks, influence diagrams, dynamic programming, reinforcement learning, and partially observable environments.",
+            "units": "3-4",
+            "schedule": "Mon, Wed, Fri 10:30-11:20 AM",
+            "instructor": "Mykel Kochenderfer",
+            "department": "CS"
+        },
+        {
+            "code": "CS 330",
+            "title": "Deep Multi-Task and Meta Learning",
+            "description": "Methods for deep multi-task learning, meta-learning, and transfer learning. Topics include task-aware architectures, optimization-based meta-learning (MAML), metric learning, few-shot learning, and self-supervised pre-training.",
+            "units": "3-4",
+            "schedule": "Mon, Wed 10:30-11:50 AM",
+            "instructor": "Chelsea Finn",
+            "department": "CS"
+        },
+        {
+            "code": "CS 224R",
+            "title": "Deep Reinforcement Learning",
+            "description": "Intersection of deep learning and reinforcement learning. Topics include policy gradient methods, Q-learning, model-based RL, offline RL, multi-agent RL, and applications to robotics and game playing.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 10:30-11:50 AM",
+            "instructor": "Chelsea Finn",
+            "department": "CS"
+        },
+        {
+            "code": "CS 224V",
+            "title": "Conversational Virtual Assistants with Deep Learning",
+            "description": "Design and implementation of conversational virtual assistants using deep learning. Covers task-oriented dialogue, question answering, knowledge grounding, and large language model fine-tuning for dialogue.",
+            "units": "3-4",
+            "schedule": "Mon, Wed 4:30-5:50 PM",
+            "instructor": "Monica Lam",
+            "department": "CS"
+        },
+        {
+            "code": "CS 25",
+            "title": "Transformers United",
+            "description": "Seminar on the latest advances in Transformer architectures and large language models. Guest lectures from leading researchers on GPT, BERT, vision transformers, multi-modal models, and foundation models.",
+            "units": "1",
+            "schedule": "Fri 1:30-2:50 PM",
+            "instructor": "Div Garg, Chetanya Rastogi",
+            "department": "CS"
+        },
+        {
+            "code": "CS 329H",
+            "title": "Machine Learning from Human Preferences",
+            "description": "How to build AI systems that learn from and align with human preferences. Topics include RLHF, preference learning, reward modeling, constitutional AI, and alignment techniques for large language models.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 1:30-2:50 PM",
+            "instructor": "Dorsa Sadigh",
+            "department": "CS"
+        },
+        {
+            "code": "CS 329D",
+            "title": "Machine Learning Under Distribution Shift",
+            "description": "Methods for building robust machine learning systems that work reliably under distribution shift. Domain adaptation, domain generalization, and evaluation under distributional shift.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 3:00-4:20 PM",
+            "instructor": "Pang Wei Koh",
+            "department": "CS"
+        },
+        {
+            "code": "CS 329T",
+            "title": "Trustworthy Machine Learning",
+            "description": "Examines the trustworthiness of machine learning systems including fairness, robustness, privacy, interpretability. Covers algorithmic fairness, adversarial robustness, differential privacy, and explainability methods.",
+            "units": "3-4",
+            "schedule": "Mon, Wed 3:00-4:20 PM",
+            "instructor": "Sanmi Koyejo",
+            "department": "CS"
+        },
+        {
+            "code": "CS 336",
+            "title": "Language Modeling from Scratch",
+            "description": "Build a GPT-style language model from scratch. Covers tokenization, transformer architecture, training infrastructure, distributed training, RLHF, evaluation, and deployment of large language models.",
+            "units": "3-4",
+            "schedule": "Mon, Wed 1:30-2:50 PM",
+            "instructor": "Percy Liang, Tatsunori Hashimoto",
+            "department": "CS"
+        },
+        {
+            "code": "CS 324",
+            "title": "Large Language Models",
+            "description": "Understanding and working with large language models. Covers architecture, training, capabilities, limitations, alignment, and societal impact of LLMs like GPT-4, Claude, and Gemini.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 10:30-11:50 AM",
+            "instructor": "Percy Liang",
+            "department": "CS"
+        },
+        {
+            "code": "CS 348I",
+            "title": "Computer Graphics in the Era of AI",
+            "description": "Intersection of computer graphics and AI. Neural rendering, neural radiance fields (NeRF), diffusion models for 3D, generative 3D content creation, and physics-based simulation with neural networks.",
+            "units": "3-4",
+            "schedule": "Mon, Wed 10:30-11:50 AM",
+            "instructor": "Jiajun Wu",
+            "department": "CS"
+        },
+        {
+            "code": "CS 237A",
+            "title": "Principles of Robot Autonomy I",
+            "description": "Basic principles for endowing mobile autonomous robots with perception, planning, and decision-making capabilities. Sensors, probabilistic state estimation, motion planning, and control.",
+            "units": "3-4",
+            "schedule": "Mon, Wed 3:00-4:20 PM",
+            "instructor": "Marco Pavone",
+            "department": "CS"
+        },
+        {
+            "code": "CS 237B",
+            "title": "Principles of Robot Autonomy II",
+            "description": "Advanced principles of robot autonomy including deep learning for robotics, reinforcement learning for control, imitation learning, sim-to-real transfer, and multi-robot systems.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 4:30-5:50 PM",
+            "instructor": "Marco Pavone",
+            "department": "CS"
+        },
+        {
+            "code": "CS 205L",
+            "title": "Continuous Mathematical Methods with an Emphasis on Machine Learning",
+            "description": "Mathematical methods for machine learning and AI. Linear algebra, optimization, probability theory, and their applications to training neural networks, kernel methods, and dimensionality reduction.",
+            "units": "3",
+            "schedule": "Tue, Thu 10:30-11:50 AM",
+            "instructor": "Ron Fedkiw",
+            "department": "CS"
+        },
+        {
+            "code": "MS&E 226",
+            "title": "Fundamentals of Data Science: Prediction, Inference, Causality",
+            "description": "Introduction to data science with a focus on prediction, inference, and causality. Covers regression, classification, cross-validation, bootstrapping, causal inference, and A/B testing. Hands-on with R and Python.",
+            "units": "3",
+            "schedule": "Mon, Wed 1:30-2:50 PM",
+            "instructor": "Stefan Wager",
+            "department": "MS&E"
+        },
+        {
+            "code": "MS&E 234",
+            "title": "Data Privacy and Ethics",
+            "description": "Legal, ethical, and policy issues related to data collection, analysis, and privacy. Covers differential privacy, fairness in machine learning, bias in AI systems, and data governance frameworks.",
+            "units": "3",
+            "schedule": "Tue, Thu 10:30-11:50 AM",
+            "instructor": "Ramesh Johari",
+            "department": "MS&E"
+        },
+        {
+            "code": "MS&E 338",
+            "title": "Reinforcement Learning: Frontiers",
+            "description": "Cutting-edge topics in reinforcement learning including offline RL, multi-agent RL, exploration, hierarchical RL, and applications to operations research and management science.",
+            "units": "3",
+            "schedule": "Mon, Wed 3:00-4:20 PM",
+            "instructor": "Benjamin Van Roy",
+            "department": "MS&E"
+        },
+        {
+            "code": "STATS 315A",
+            "title": "Modern Applied Statistics: Learning",
+            "description": "Overview of supervised learning with a focus on regression and classification. Covers linear methods, basis expansions, regularization, kernel methods, trees, boosting, neural networks, and support vector machines.",
+            "units": "2-3",
+            "schedule": "Mon, Wed 1:30-2:50 PM",
+            "instructor": "Robert Tibshirani",
+            "department": "STATS"
+        },
+        {
+            "code": "STATS 315B",
+            "title": "Modern Applied Statistics: Data Mining",
+            "description": "Data mining and machine learning techniques for large datasets. Covers ensemble methods, deep learning, clustering, association rules, and techniques for high-dimensional data analysis.",
+            "units": "2-3",
+            "schedule": "Tue, Thu 1:30-2:50 PM",
+            "instructor": "Jerome Friedman",
+            "department": "STATS"
+        },
+        {
+            "code": "EE 364A",
+            "title": "Convex Optimization I",
+            "description": "Concentrates on recognizing and solving convex optimization problems that arise in engineering. Convex sets, functions, and optimization problems. Least-squares, linear and quadratic programs, semidefinite programming. Widely used in ML for model training.",
+            "units": "3-4",
+            "schedule": "Mon, Wed, Fri 10:30-11:20 AM",
+            "instructor": "Stephen Boyd",
+            "department": "EE"
+        },
+        {
+            "code": "EE 364B",
+            "title": "Convex Optimization II",
+            "description": "Continuation of EE 364A. Subgradient, cutting-plane, and ellipsoid methods. Decomposition and distributed optimization. Alternating direction method of multipliers. Applications in machine learning and signal processing.",
+            "units": "3-4",
+            "schedule": "Mon, Wed, Fri 1:30-2:20 PM",
+            "instructor": "Stephen Boyd",
+            "department": "EE"
+        },
+        {
+            "code": "OIT 367",
+            "title": "Business Applications of AI and Machine Learning",
+            "description": "How businesses can leverage artificial intelligence and machine learning for competitive advantage. Covers applications in marketing, operations, finance, and strategy. Case studies from leading AI-driven companies.",
+            "units": "3",
+            "schedule": "Tue 8:15-11:15 AM",
+            "instructor": "Mohammad Akbarpour",
+            "department": "OIT"
+        },
+        {
+            "code": "STRAMGT 351",
+            "title": "AI-Powered Business Strategy",
+            "description": "Strategic implications of artificial intelligence for businesses. How AI transforms competitive dynamics, organizational design, and innovation. Frameworks for AI strategy development and implementation.",
+            "units": "3",
+            "schedule": "Wed 8:15-11:15 AM",
+            "instructor": "Erik Brynjolfsson",
+            "department": "STRAMGT"
+        },
+        {
+            "code": "GSBGEN 566",
+            "title": "AI in Business and Society",
+            "description": "Explores the impact of AI on business operations, labor markets, and society. Topics include algorithmic decision-making, AI governance, responsible AI deployment, and the future of work in the age of AI.",
+            "units": "2",
+            "schedule": "Thu 12:15-3:15 PM",
+            "instructor": "Susan Athey",
+            "department": "GSBGEN"
+        },
+        {
+            "code": "CS 329S",
+            "title": "Machine Learning Systems Design",
+            "description": "Design and implementation of production machine learning systems. Covers data management, model selection, training, deployment, monitoring, and maintenance. MLOps best practices and tools.",
+            "units": "3-4",
+            "schedule": "Mon, Wed 4:30-5:50 PM",
+            "instructor": "Chip Huyen",
+            "department": "CS"
+        },
+        {
+            "code": "CS 246",
+            "title": "Mining Massive Datasets",
+            "description": "The availability of massive datasets is changing the landscape of algorithms. Topics include MapReduce, locality-sensitive hashing, dimensionality reduction, recommendation systems, clustering, and graph mining.",
+            "units": "3-4",
+            "schedule": "Mon, Wed 10:30-11:50 AM",
+            "instructor": "Jure Leskovec",
+            "department": "CS"
+        },
+        {
+            "code": "CS 229M",
+            "title": "Machine Learning Theory",
+            "description": "Theoretical foundations of machine learning. Covers generalization bounds, VC dimension, PAC learning, online learning, bandit algorithms, and connections to optimization and information theory.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 3:00-4:20 PM",
+            "instructor": "Tengyu Ma",
+            "department": "CS"
+        },
+        {
+            "code": "CS 229S",
+            "title": "Machine Learning for Sustainability",
+            "description": "Application of machine learning to sustainability challenges. Energy systems, climate modeling, smart buildings, transportation, agriculture, and environmental monitoring using AI/ML techniques.",
+            "units": "3",
+            "schedule": "Tue, Thu 1:30-2:50 PM",
+            "instructor": "Ram Rajagopal",
+            "department": "CS"
+        },
+        {
+            "code": "CS 131",
+            "title": "Computer Vision: Foundations and Applications",
+            "description": "An overview of the foundations and applications of computer vision. Image formation, filtering, feature detection, segmentation, recognition, and deep learning for vision tasks.",
+            "units": "3-4",
+            "schedule": "Mon, Wed, Fri 10:30-11:20 AM",
+            "instructor": "Juan Carlos Niebles",
+            "department": "CS"
+        },
+        {
+            "code": "CS 161",
+            "title": "Design and Analysis of Algorithms",
+            "description": "Worst and average case analysis. Recurrences and asymptotics. Efficient algorithms for sorting, searching, graphs, and string matching. Design techniques: divide-and-conquer, dynamic programming, greedy algorithms.",
+            "units": "3-5",
+            "schedule": "Mon, Wed, Fri 1:30-2:20 PM",
+            "instructor": "Mary Wootters",
+            "department": "CS"
+        },
+        {
+            "code": "CS 223A",
+            "title": "Introduction to Robotics",
+            "description": "Robotics foundations including spatial descriptions, manipulator kinematics, dynamics, and control. Motion planning, trajectory generation, sensing, and actuation. Applications in industrial and mobile robotics.",
+            "units": "3-4",
+            "schedule": "Mon, Wed 3:00-4:20 PM",
+            "instructor": "Jeannette Bohg",
+            "department": "CS"
+        },
+        {
+            "code": "CS 157",
+            "title": "Computational Logic",
+            "description": "Propositional and first-order logic as formal models of computation. Validity, satisfiability, and logical entailment. Applications to AI planning, verification, and automated reasoning.",
+            "units": "3",
+            "schedule": "Mon, Wed 10:30-11:50 AM",
+            "instructor": "Michael Genesereth",
+            "department": "CS"
+        },
+        {
+            "code": "CS 348K",
+            "title": "Visual Computing Systems",
+            "description": "The design of visual computing systems from sensors to displays. Emphasis on the interplay between hardware and software for visual computing, including computational photography, image processing, and neural rendering.",
+            "units": "3-4",
+            "schedule": "Mon, Wed 1:30-2:50 PM",
+            "instructor": "Kayvon Fatahalian",
+            "department": "CS"
+        },
+        {
+            "code": "MS&E 252",
+            "title": "Decision Analysis I: Foundations of Decision Analysis",
+            "description": "Introduction to the principles and practice of decision analysis. Structuring decision problems, assessing probabilities and utilities, Bayesian inference, and value of information.",
+            "units": "3",
+            "schedule": "Mon, Wed 10:30-11:50 AM",
+            "instructor": "Ronald Howard",
+            "department": "MS&E"
+        },
+        {
+            "code": "STATS 202",
+            "title": "Data Mining and Analysis",
+            "description": "Practical introduction to data mining and machine learning. Classification, regression, clustering, dimensionality reduction, and model selection. Hands-on experience with real-world datasets using R and Python.",
+            "units": "3",
+            "schedule": "Mon, Wed 1:30-2:50 PM",
+            "instructor": "Trevor Hastie",
+            "department": "STATS"
+        },
+        {
+            "code": "CS 229T",
+            "title": "Statistical Learning Theory",
+            "description": "Advanced course in learning theory. Uniform convergence, Rademacher complexity, online learning, boosting, kernel methods, and neural network generalization theory.",
+            "units": "3",
+            "schedule": "Tue, Thu 10:30-11:50 AM",
+            "instructor": "Tengyu Ma",
+            "department": "CS"
+        },
+        {
+            "code": "CS 281",
+            "title": "Ethics of Artificial Intelligence",
+            "description": "Ethical considerations in the design and deployment of AI systems. Bias and fairness, transparency, accountability, privacy, autonomous weapons, and the societal impact of artificial intelligence.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 3:00-4:20 PM",
+            "instructor": "Rob Reich",
+            "department": "CS"
+        },
+        {
+            "code": "CS 332",
+            "title": "Advanced Survey of Reinforcement Learning",
+            "description": "Advanced topics in reinforcement learning. Theory and algorithms for exploration, function approximation, policy optimization, and connections to control theory and neuroscience.",
+            "units": "3",
+            "schedule": "Mon, Wed 4:30-5:50 PM",
+            "instructor": "Emma Brunskill",
+            "department": "CS"
+        },
+        {
+            "code": "CS 398",
+            "title": "Computational Education",
+            "description": "Application of AI and computing to education. Intelligent tutoring systems, automated grading, educational data mining, adaptive learning, and natural language processing for education.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 1:30-2:50 PM",
+            "instructor": "Chris Piech",
+            "department": "CS"
+        },
+        {
+            "code": "CS 229A",
+            "title": "Applied Machine Learning",
+            "description": "Practical machine learning for real-world applications. Emphasis on methodology and best practices for building ML systems. Feature engineering, model selection, evaluation, and deployment.",
+            "units": "3",
+            "schedule": "Mon, Wed 3:00-4:20 PM",
+            "instructor": "Andrew Ng",
+            "department": "CS"
+        },
+        {
+            "code": "OIT 673",
+            "title": "Data and Decisions",
+            "description": "How organizations can use data analytics and AI to make better decisions. Covers predictive analytics, causal inference, experimentation, and machine learning in business contexts.",
+            "units": "3",
+            "schedule": "Mon 8:15-11:15 AM",
+            "instructor": "Guido Imbens",
+            "department": "OIT"
+        },
+        {
+            "code": "FINANCE 385",
+            "title": "AI in Finance",
+            "description": "Applications of AI and machine learning in finance. Algorithmic trading, risk management, fraud detection, robo-advisors, and fintech innovation. Analysis of how AI is transforming financial services.",
+            "units": "3",
+            "schedule": "Thu 8:15-11:15 AM",
+            "instructor": "Markus Pelger",
+            "department": "FINANCE"
+        },
+        {
+            "code": "MGTECON 603",
+            "title": "Econometrics",
+            "description": "Modern econometric methods for business and policy evaluation. Regression analysis, instrumental variables, difference-in-differences, regression discontinuity, and machine learning methods for causal inference.",
+            "units": "4",
+            "schedule": "Mon, Wed 10:30-11:50 AM",
+            "instructor": "Guido Imbens",
+            "department": "MGTECON"
+        },
+        {
+            "code": "CS 329X",
+            "title": "Human-Centered AI",
+            "description": "Design principles for human-centered AI systems. Human-AI interaction, explainability, fairness, and the role of human judgment in AI-assisted decision making. Interdisciplinary perspectives.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 1:30-2:50 PM",
+            "instructor": "James Landay",
+            "department": "CS"
+        },
+        {
+            "code": "CS 348E",
+            "title": "Character Animation: Modeling, Simulation, and Control of Human Motion",
+            "description": "Computational methods for modeling and simulating human motion. Physics-based simulation, motion capture, deep learning for motion synthesis, and reinforcement learning for character control.",
+            "units": "3-4",
+            "schedule": "Tue, Thu 10:30-11:50 AM",
+            "instructor": "Karen Liu",
+            "department": "CS"
+        },
+        {
+            "code": "MKTG 355",
+            "title": "AI for Marketing and Growth",
+            "description": "Application of AI and machine learning to marketing problems. Customer segmentation, recommendation systems, dynamic pricing, A/B testing at scale, and marketing automation using AI.",
+            "units": "3",
+            "schedule": "Tue 1:30-4:30 PM",
+            "instructor": "Harikesh Nair",
+            "department": "MKTG"
+        },
+    ]
+
+
+def get_courses(force_refresh: bool = False) -> list[dict]:
+    """Load courses from cache, scrape, or fall back to static data."""
+    if not force_refresh and os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, "r") as f:
+            data = json.load(f)
+            if data:
+                return data
+
+    # Try scraping
+    courses = run_scraper()
+
+    # If scraping got very few results, supplement with static data
+    if len(courses) < 20:
+        print("Supplementing with static course data...")
+        static = load_static_fallback()
+        existing_codes = {c["code"] for c in courses}
+        for sc in static:
+            if sc["code"] not in existing_codes:
+                courses.append(sc)
+
+    # Save cache
+    with open(CACHE_FILE, "w") as f:
+        json.dump(courses, f, indent=2)
+
+    print(f"Total courses cached: {len(courses)}")
+    return courses
+
+
+if __name__ == "__main__":
+    courses = get_courses(force_refresh=True)
+    print(f"\nCached {len(courses)} courses to {CACHE_FILE}")
+    for c in courses[:5]:
+        print(f"  {c['code']}: {c['title']}")

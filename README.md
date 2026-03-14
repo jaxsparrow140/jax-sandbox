@@ -47,4 +47,8 @@ Run tests with: `python3 trie.py`
 
 ## License
 
+<<<<<<< HEAD
 MIT
+=======
+MIT
+>>>>>>> 0cc4177ab492f11c80e835124fef75be2b2e55db
