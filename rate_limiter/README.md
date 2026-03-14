@@ -2,14 +2,14 @@
 
 ## Overview
 
-This implementation provides a sliding window rate limiter using the log-based algorithm. It allows N requests per M seconds and handles burst traffic correctly.
+This implementation provides a rate limiter using the sliding window log algorithm. Unlike fixed window algorithms, the sliding window approach accurately handles bursty traffic by tracking individual request timestamps and allowing requests based on a moving time window.
 
-## Features
+## Implementation Details
 
-- Implements sliding window algorithm with timestamp logging
-- Accurately handles burst requests
-- Provides methods to check current request count
-- Thread-safe for single-threaded use cases
+- **Algorithm**: Sliding window log
+- **Key feature**: Tracks exact request timestamps to handle bursts correctly
+- **Limit**: N requests per M seconds
+- **Memory usage**: Stores timestamps for each request (memory grows linearly with requests)
 
 ## Usage
 
@@ -22,31 +22,32 @@ limiter = SlidingWindowRateLimiter(max_requests=10, window_seconds=5)
 # Check if request is allowed
 if limiter.allow_request():
     # Process request
-    pass
+    print("Request allowed")
 else:
-    # Rate limit exceeded
-    print("Rate limit exceeded")
+    # Reject request
+    print("Request denied - rate limit exceeded")
 ```
 
 ## Testing
 
-Run tests with:
+The test suite simulates 100 requests over 10 seconds with a limit of 10 requests per 5 seconds. The sliding window algorithm should allow approximately 20 requests in total (10 in each 5-second window), with some variation due to the bursty pattern and exact timing.
 
+Run tests with:
 ```bash
-python3 test_rate_limiter.py
+python test_rate_limiter.py
 ```
 
-The test simulates 100 requests over 10 seconds with a limit of 10 requests per 5 seconds.
-Expected result: Approximately 20 requests allowed (10 per 5-second window).
+## Advantages over Fixed Window
 
-## Algorithm
+- Accurately handles bursty traffic
+- No "cliff edge" at window boundaries
+- More fair distribution of requests
 
-The sliding window algorithm works by:
+## Limitations
 
-1. Maintaining a list of request timestamps
-2. For each new request:
-   - Remove all timestamps older than (current_time - window_seconds)
-   - If the number of remaining timestamps < max_requests, allow the request and add the current timestamp
-   - Otherwise, deny the request
+- Memory usage grows with the number of requests (stores timestamps)
+- For very high throughput, consider using a token bucket or fixed window with interpolation
 
-This approach provides accurate rate limiting even with bursty traffic patterns.
+## License
+
+MIT
