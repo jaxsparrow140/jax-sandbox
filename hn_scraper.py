@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 import sys
 
 def scrape_hn_top_articles():
-    """Fetch and parse top 10 Hacker News articles"""
+    """Scrape top 10 article titles from Hacker News"""
     try:
         # Fetch the Hacker News homepage
         url = "https://news.ycombinator.com/"
@@ -21,59 +21,35 @@ def scrape_hn_top_articles():
         # Parse the HTML content
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Find all story links
-        # Based on web_fetch output, article titles are the <a> tags with href starting with "item?id="
-        # that have text that is not "comments", "vote", "ago", or numbers
-        story_links = []
+        # Find all story links (class 'titleline')
+        story_links = soup.find_all('span', class_='titleline')
         
-        # Find all links with href starting with "item?id="
-        for link in soup.find_all('a', href=True):
-            if link['href'].startswith('item?id='):
-                text = link.get_text().strip()
-                
-                # Filter out non-title links
-                # Exclude links that are just numbers, "comments", "vote", "ago", "points"
-                if text and len(text) > 3 and not text.isdigit() and \
-                   'comments' not in text and 'vote' not in text and \
-                   'ago' not in text and 'points' not in text and \
-                   'discuss' not in text and 'new' not in text and \
-                   '1 comment' not in text and '2 comments' not in text and \
-                   '3 comments' not in text and '4 comments' not in text and \
-                   '5 comments' not in text and '6 comments' not in text and \
-                   '7 comments' not in text and '8 comments' not in text and \
-                   '9 comments' not in text and '10 comments' not in text:
-                    story_links.append(link)
-                    
-                    # Stop when we have 10 titles
-                    if len(story_links) >= 10:
-                        break
+        # Extract top 10 titles
+        top_titles = []
+        for link in story_links[:10]:
+            title_tag = link.find('a')
+            if title_tag:
+                top_titles.append(title_tag.get_text())
         
-        # Get the top 10 articles
-        top_articles = story_links[:10]
-        
-        # Print titles
+        # Print the titles
         print("Top 10 Hacker News Articles:")
         print("=" * 40)
-        for i, link in enumerate(top_articles, 1):
-            title = link.get_text().strip()
-            url = "https://news.ycombinator.com/" + link['href']
+        for i, title in enumerate(top_titles, 1):
             print(f"{i}. {title}")
-            print(f"   {url}")
-            print()
         
-        return len(top_articles)
+        return top_titles
         
     except requests.exceptions.RequestException as e:
         print(f"Error fetching Hacker News: {e}", file=sys.stderr)
-        return 0
+        return []
     except Exception as e:
         print(f"Error parsing Hacker News: {e}", file=sys.stderr)
-        return 0
+        return []
 
 if __name__ == "__main__":
-    count = scrape_hn_top_articles()
-    if count == 0:
+    titles = scrape_hn_top_articles()
+    if not titles:
         sys.exit(1)
-    else:
-        print(f"Successfully scraped {count} articles.")
-        sys.exit(0)
+    
+    # Exit with success code
+    sys.exit(0)
