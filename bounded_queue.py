@@ -1,139 +1,122 @@
 """
-Thread-safe bounded blocking queue implementation using raw threading primitives.
-No queue.Queue allowed - built from scratch with Lock, Condition, etc.
+Thread-safe bounded blocking queue implementation.
+
+Supports:
+- put(item): blocks if queue is full
+- get(): blocks if queue is empty
+- put_nowait(item): raises Full exception if queue is full
+- get_nowait(): raises Empty exception if queue is empty
 """
 
 import threading
-from typing import Any, Optional
-from collections import deque
+import time
 
-
-class BoundedQueue:
-    """
-    A thread-safe bounded blocking queue.
-    
-    - put(item): Blocks if the queue is full
-    - get(): Blocks if the queue is empty
-    - put_nowait(item): Raises QueueFull exception instead of blocking
-    - get_nowait(): Raises QueueEmpty exception instead of blocking
-    """
-    
-    def __init__(self, maxsize: int):
-        if maxsize <= 0:
-            raise ValueError("maxsize must be positive")
-        
-        self._maxsize = maxsize
-        self._queue = deque()
-        
-        # Lock for mutual exclusion
-        self._lock = threading.Lock()
-        
-        # Condition for waiting on put (when queue is full)
-        self._not_full = threading.Condition(self._lock)
-        
-        # Condition for waiting on get (when queue is empty)
-        self._not_empty = threading.Condition(self._lock)
-    
-    def put(self, item: Any, timeout: Optional[float] = None) -> None:
-        """
-        Put an item into the queue.
-        
-        Blocks if the queue is full, waiting until space is available.
-        """
-        with self._not_full:
-            while len(self._queue) >= self._maxsize:
-                self._not_full.wait(timeout)
-            
-            self._queue.append(item)
-            self._not_empty.notify()
-    
-    def get(self, timeout: Optional[float] = None) -> Any:
-        """
-        Remove and return an item from the queue.
-        
-        Blocks if the queue is empty, waiting until an item is available.
-        """
-        with self._not_empty:
-            while len(self._queue) == 0:
-                self._not_empty.wait(timeout)
-            
-            item = self._queue.popleft()
-            self._not_full.notify()
-            return item
-    
-    def put_nowait(self, item: Any) -> None:
-        """
-        Put an item into the queue without blocking.
-        
-        Raises QueueFull if the queue is full.
-        """
-        with self._lock:
-            if len(self._queue) >= self._maxsize:
-                raise QueueFull("Queue is full")
-            
-            self._queue.append(item)
-            self._not_empty.notify()
-    
-    def get_nowait(self) -> Any:
-        """
-        Remove and return an item from the queue without blocking.
-        
-        Raises QueueEmpty if the queue is empty.
-        """
-        with self._lock:
-            if len(self._queue) == 0:
-                raise QueueEmpty("Queue is empty")
-            
-            item = self._queue.popleft()
-            self._not_full.notify()
-            return item
-    
-    def size(self) -> int:
-        """Return current size of the queue."""
-        with self._lock:
-            return len(self._queue)
-    
-    def empty(self) -> bool:
-        """Return True if queue is empty."""
-        with self._lock:
-            return len(self._queue) == 0
-    
-    def full(self) -> bool:
-        """Return True if queue is full."""
-        with self._lock:
-            return len(self._queue) >= self._maxsize
-
-
-class QueueEmpty(Exception):
-    """Exception raised when get_nowait is called on an empty queue."""
+class Empty(Exception):
+    """Exception raised when get() or get_nowait() is called on an empty queue."""
     pass
 
-
-class QueueFull(Exception):
-    """Exception raised when put_nowait is called on a full queue."""
+class Full(Exception):
+    """Exception raised when put() or put_nowait() is called on a full queue."""
     pass
 
-
-if __name__ == "__main__":
-    # Basic sanity test
-    q = BoundedQueue(2)
+class BoundedBlockingQueue:
+    """A thread-safe bounded blocking queue."""
     
-    q.put_nowait(1)
-    q.put_nowait(2)
+    def __init__(self, maxsize):
+        """Initialize the queue with a maximum size."""
+        self.maxsize = maxsize
+        self.queue = []
+        self.mutex = threading.Lock()
+        self.not_empty = threading.Condition(self.mutex)
+        self.not_full = threading.Condition(self.mutex)
+        
+    def put(self, item, block=True, timeout=None):
+        """Put an item into the queue.
+        
+        If optional args 'block' is true and 'timeout' is None (the default),
+        block if necessary until a free slot is available.
+        If 'timeout' is a positive number, it blocks at most 'timeout' seconds and raises
+        the Full exception if no free slot was available within that time.
+        Otherwise ('block' is false), put an item on the queue if a free slot is immediately
+        available, else raise the Full exception.
+        """
+        with self.not_full:
+            if block:
+                if timeout is None:
+                    while len(self.queue) >= self.maxsize:
+                        self.not_full.wait()
+                else:
+                    end_time = time.time() + timeout
+                    while len(self.queue) >= self.maxsize:
+                        remaining = end_time - time.time()
+                        if remaining <= 0.0:
+                            raise Full
+                        self.not_full.wait(remaining)
+                self.queue.append(item)
+                self.not_empty.notify()
+            else:
+                if len(self.queue) >= self.maxsize:
+                    raise Full
+                self.queue.append(item)
+                self.not_empty.notify()
     
-    try:
-        q.put_nowait(3)  # Should raise QueueFull
-        print("ERROR: Should have raised QueueFull")
-    except QueueFull:
-        print("✓ QueueFull raised correctly")
+    def put_nowait(self, item):
+        """Put an item into the queue without blocking.
+        
+        If no free slot is immediately available, raise Full.
+        """
+        return self.put(item, block=False)
     
-    assert q.get_nowait() == 1
-    assert q.get_nowait() == 2
+    def get(self, block=True, timeout=None):
+        """Remove and return an item from the queue.
+        
+        If optional args 'block' is true and 'timeout' is None (the default),
+        block if necessary until an item is available.
+        If 'timeout' is a positive number, it blocks at most 'timeout' seconds and raises
+        the Empty exception if no item was available within that time.
+        Otherwise ('block' is false), get an item if one is immediately available, else
+        raise the Empty exception.
+        """
+        with self.not_empty:
+            if block:
+                if timeout is None:
+                    while len(self.queue) == 0:
+                        self.not_empty.wait()
+                else:
+                    end_time = time.time() + timeout
+                    while len(self.queue) == 0:
+                        remaining = end_time - time.time()
+                        if remaining <= 0.0:
+                            raise Empty
+                        self.not_empty.wait(remaining)
+                item = self.queue.pop(0)
+                self.not_full.notify()
+                return item
+            else:
+                if len(self.queue) == 0:
+                    raise Empty
+                item = self.queue.pop(0)
+                self.not_full.notify()
+                return item
     
-    try:
-        q.get_nowait()  # Should raise QueueEmpty
-        print("ERROR: Should have raised QueueEmpty")
-    except QueueEmpty:
-        print("✓ QueueEmpty raised correctly")
+    def get_nowait(self):
+        """Remove and return an item from the queue without blocking.
+        
+        If no item is immediately available, raise Empty.
+        """
+        return self.get(block=False)
     
-    print("✓ Basic sanity tests passed")
+    def qsize(self):
+        """Return the approximate size of the queue."""
+        with self.mutex:
+            return len(self.queue)
+    
+    def empty(self):
+        """Return True if the queue is empty, False otherwise."""
+        with self.mutex:
+            return len(self.queue) == 0
+    
+    def full(self):
+        """Return True if the queue is full, False otherwise."""
+        with self.mutex:
+            return len(self.queue) >= self.maxsize"""

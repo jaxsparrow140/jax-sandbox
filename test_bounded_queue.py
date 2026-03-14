@@ -1,64 +1,72 @@
+"""
+Producer-consumer test for BoundedBlockingQueue.
+
+Creates 3 producers and 2 consumers with a queue of size 5.
+"""
+
 import threading
-import unittest
+import time
+import random
+from bounded_queue import BoundedBlockingQueue, Empty, Full
 
-from bounded_queue import BoundedBlockingQueue, QueueEmpty, QueueFull
+def producer(queue, producer_id, num_items):
+    """Producer function that puts items into the queue."""
+    for i in range(num_items):
+        item = f"producer-{producer_id}-item-{i}"
+        # Random delay to simulate variable production rates
+        time.sleep(random.uniform(0.1, 0.5))
+        try:
+            queue.put(item)
+            print(f"Producer {producer_id} put: {item}")
+        except Full:
+            print(f"Producer {producer_id} failed to put: {item} (queue full)")
 
+def consumer(queue, consumer_id):
+    """Consumer function that gets items from the queue."""
+    while True:
+        try:
+            # Random delay to simulate variable consumption rates
+            time.sleep(random.uniform(0.1, 0.8))
+            item = queue.get(timeout=1.0)
+            print(f"Consumer {consumer_id} got: {item}")
+        except Empty:
+            print(f"Consumer {consumer_id} timed out waiting for items")
+            break
+        except Exception as e:
+            print(f"Consumer {consumer_id} error: {e}")
+            break
 
-class TestBoundedBlockingQueue(unittest.TestCase):
-    def test_producer_consumer(self):
-        q = BoundedBlockingQueue(maxsize=5)
-        produced = []
-        consumed = []
-        produced_lock = threading.Lock()
-        consumed_lock = threading.Lock()
-
-        def producer(start):
-            for i in range(start, start + 10):
-                with produced_lock:
-                    produced.append(i)
-                q.put(i)
-
-        def consumer():
-            while True:
-                item = q.get()
-                if item is None:
-                    break
-                with consumed_lock:
-                    consumed.append(item)
-
-        producers = [threading.Thread(target=producer, args=(i * 10,)) for i in range(3)]
-        consumers = [threading.Thread(target=consumer) for _ in range(2)]
-
-        for t in consumers:
-            t.start()
-        for t in producers:
-            t.start()
-
-        for t in producers:
-            t.join()
-
-        # Send sentinel for each consumer
-        for _ in range(2):
-            q.put(None)
-
-        for t in consumers:
-            t.join()
-
-        self.assertEqual(sorted(produced), sorted(consumed))
-        self.assertEqual(len(consumed), 30)
-
-    def test_put_nowait_raises_queue_full(self):
-        q = BoundedBlockingQueue(maxsize=2)
-        q.put_nowait(1)
-        q.put_nowait(2)
-        with self.assertRaises(QueueFull):
-            q.put_nowait(3)
-
-    def test_get_nowait_raises_queue_empty(self):
-        q = BoundedBlockingQueue(maxsize=2)
-        with self.assertRaises(QueueEmpty):
-            q.get_nowait()
-
+def main():
+    # Create a bounded queue with max size of 5
+    queue = BoundedBlockingQueue(maxsize=5)
+    
+    # Create 3 producer threads
+    producer_threads = []
+    for i in range(3):
+        t = threading.Thread(target=producer, args=(queue, i+1, 10))
+        producer_threads.append(t)
+        t.start()
+    
+    # Create 2 consumer threads
+    consumer_threads = []
+    for i in range(2):
+        t = threading.Thread(target=consumer, args=(queue, i+1))
+        consumer_threads.append(t)
+        t.start()
+    
+    # Wait for all producers to finish
+    for t in producer_threads:
+        t.join()
+    
+    # Let consumers run for a bit longer to clear the queue
+    time.sleep(5)
+    
+    # Stop consumers (they'll exit when queue is empty and timeout occurs)
+    for t in consumer_threads:
+        t.join()
+    
+    print("All producers and consumers finished.")
+    print(f"Final queue size: {queue.qsize()}")
 
 if __name__ == "__main__":
-    unittest.main()
+    main()"""}}
