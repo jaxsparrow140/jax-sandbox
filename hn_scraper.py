@@ -7,10 +7,10 @@ import requests
 from bs4 import BeautifulSoup
 import sys
 
-def scrape_hn_top_articles():
-    """Scrape top 10 article titles from Hacker News"""
+def scrape_hacker_news():
+    """Fetch and parse Hacker News top stories"""
     try:
-        # Fetch the Hacker News homepage
+        # Send request to Hacker News
         url = "https://news.ycombinator.com/"
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -18,24 +18,16 @@ def scrape_hn_top_articles():
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
-        # Parse the HTML content
+        # Parse HTML
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Find all story links (class 'titleline')
-        story_links = soup.find_all('span', class_='titleline')
+        # Find all story titles (class 'titleline')
+        titles = soup.select('span.titleline a')
         
         # Extract top 10 titles
         top_titles = []
-        for link in story_links[:10]:
-            title_tag = link.find('a')
-            if title_tag:
-                top_titles.append(title_tag.get_text())
-        
-        # Print the titles
-        print("Top 10 Hacker News Articles:")
-        print("=" * 40)
-        for i, title in enumerate(top_titles, 1):
-            print(f"{i}. {title}")
+        for i, title in enumerate(titles[:10]):
+            top_titles.append(title.get_text())
         
         return top_titles
         
@@ -46,10 +38,19 @@ def scrape_hn_top_articles():
         print(f"Error parsing Hacker News: {e}", file=sys.stderr)
         return []
 
-if __name__ == "__main__":
-    titles = scrape_hn_top_articles()
+def main():
+    """Main function"""
+    print("Fetching top 10 Hacker News stories...")
+    titles = scrape_hacker_news()
+    
     if not titles:
+        print("Failed to retrieve any titles.")
         sys.exit(1)
     
-    # Exit with success code
-    sys.exit(0)
+    print("\nTop 10 Hacker News Stories:")
+    print("=" * 40)
+    for i, title in enumerate(titles, 1):
+        print(f"{i}. {title}")
+
+if __name__ == "__main__":
+    main()
