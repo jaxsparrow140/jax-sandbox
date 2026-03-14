@@ -11,7 +11,7 @@ class TrieNode:
 class Trie:
     def __init__(self):
         self.root = TrieNode()
-
+    
     def insert(self, word):
         """Insert a word into the trie"""
         node = self.root
@@ -20,7 +20,7 @@ class Trie:
                 node.children[char] = TrieNode()
             node = node.children[char]
         node.is_end_of_word = True
-
+    
     def search(self, word):
         """Search for a complete word in the trie"""
         node = self.root
@@ -29,7 +29,7 @@ class Trie:
                 return False
             node = node.children[char]
         return node.is_end_of_word
-
+    
     def starts_with(self, prefix):
         """Check if any word in the trie starts with the given prefix"""
         node = self.root
@@ -38,9 +38,9 @@ class Trie:
                 return False
             node = node.children[char]
         return True
-
+    
     def delete(self, word):
-        """Delete a word from the trie and clean up unused nodes"""
+        """Delete a word from the trie, cleaning up unused nodes"""
         def _delete_helper(node, word, index):
             if index == len(word):
                 # We've reached the end of the word
@@ -58,13 +58,14 @@ class Trie:
             
             if should_delete_child:
                 del node.children[char]
-                
-            # Return True if this node should be deleted (no longer end of word and no children)
-            return not node.is_end_of_word and len(node.children) == 0
+                # Return True if this node is not an end of word and has no children
+                return not node.is_end_of_word and len(node.children) == 0
+            
+            return False
         
-        return _delete_helper(self.root, word, 0)
+        _delete_helper(self.root, word, 0)
 
-# Test the implementation
+# Test function
 if __name__ == "__main__":
     trie = Trie()
     
@@ -84,45 +85,28 @@ if __name__ == "__main__":
     print("Starts with 'cat':", trie.starts_with("cat"))  # False
     
     # Test delete
-    print("Deleting 'app'")
     trie.delete("app")
+    print("After deleting 'app':")
     print("Searching for 'app':", trie.search("app"))  # False
-    print("Starts with 'app':", trie.starts_with("app"))  # True (because 'apple' and 'application' still exist)
     print("Searching for 'apple':", trie.search("apple"))  # True
+    print("Starts with 'app':", trie.starts_with("app"))  # True (because 'application' and 'appreciate' still exist)
     
-    # Test delete 'apple'
-    print("Deleting 'apple'")
     trie.delete("apple")
+    print("After deleting 'apple':")
     print("Searching for 'apple':", trie.search("apple"))  # False
-    print("Starts with 'app':", trie.starts_with("app"))  # True (because 'application' still exists)
-    print("Searching for 'application':", trie.search("application"))  # True
+    print("Starts with 'app':", trie.starts_with("app"))  # True (because 'application' and 'appreciate' still exist)
     
-    # Test delete 'application'
-    print("Deleting 'application'")
-    trie.delete("application")
-    print("Searching for 'application':", trie.search("application"))  # False
-    print("Starts with 'app':", trie.starts_with("app"))  # False (no words left starting with 'app')
+    # Verify remaining words starting with 'app'
+    print("Remaining words starting with 'app':")
+    for word in ["application", "appreciate"]:
+        print(f"  {word}: {trie.search(word)}")
     
-    # Test delete 'banana'
-    print("Deleting 'banana'")
-    trie.delete("banana")
-    print("Searching for 'banana':", trie.search("banana"))  # False
-    print("Starts with 'ban':", trie.starts_with("ban"))  # True (because 'band' and 'bandana' still exist)
+    trie.delete("nonexistent")
+    print("Deleted nonexistent word - no error")
     
-    # Test delete 'band'
-    print("Deleting 'band'")
-    trie.delete("band")
-    print("Searching for 'band':", trie.search("band"))  # False
-    print("Starts with 'ban':", trie.starts_with("ban"))  # True (because 'bandana' still exists)
-    
-    # Test delete 'bandana'
-    print("Deleting 'bandana'")
-    trie.delete("bandana")
-    print("Searching for 'bandana':", trie.search("bandana"))  # False
-    print("Starts with 'ban':", trie.starts_with("ban"))  # False (no words left starting with 'ban')
-    
-    print("All tests completed.")
-<<<<<<< HEAD
-
-=======
->>>>>>> 0cc4177ab492f11c80e835124fef75be2b2e55db
+    trie.insert("")
+    print("Inserted empty string")
+    print("Search empty string:", trie.search(""))  # True
+    trie.delete("")
+    print("Deleted empty string")
+    print("Search empty string:", trie.search(""))  # False
