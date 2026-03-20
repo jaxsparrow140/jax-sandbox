@@ -7,7 +7,7 @@ import threading
 from typing import Any, Optional
 
 
-class BoundedQueue:
+class BoundedBlockingQueue:
     """
     A thread-safe bounded blocking queue using threading primitives.
     
@@ -42,12 +42,8 @@ class BoundedQueue:
             # Wait while queue is at capacity
             while len(self._queue) >= self._maxsize:
                 self._not_full.wait()
-        
-        # Now we have the lock and queue is not full
-        self._queue.append(item)
-        
-        # Signal that queue is not empty
-        with self._not_empty:
+            # Append and notify while still holding the lock
+            self._queue.append(item)
             self._not_empty.notify()
     
     def get(self, timeout: Optional[float] = None) -> Any:
@@ -65,12 +61,8 @@ class BoundedQueue:
                         return None  # Timeout expired
                 else:
                     self._not_empty.wait()
-        
-        # Now we have the lock and queue is not empty
-        item = self._queue.pop(0)  # FIFO
-        
-        # Signal that queue is not full
-        with self._not_full:
+            # Pop and notify while still holding the lock
+            item = self._queue.pop(0)  # FIFO
             self._not_full.notify()
         
         return item
@@ -112,6 +104,10 @@ class QueueEmpty(Exception):
     pass
 
 
+
+# Backwards-compatible alias
+BoundedQueue = BoundedBlockingQueue
+
 # ============================================================================
 # Producer-Consumer Test
 # ============================================================================
@@ -123,7 +119,7 @@ def test_producer_consumer():
     """
     import time
     
-    queue = BoundedQueue(maxsize=5)
+    queue = BoundedBlockingQueue(maxsize=5)
     produced_items = []
     consumed_items = []
     num_producers = 3
@@ -203,7 +199,7 @@ def test_producer_consumer():
     # Test non-blocking operations
     print("\n=== Testing put_nowait / get_nowait ===")
     
-    small_queue = BoundedQueue(maxsize=2)
+    small_queue = BoundedBlockingQueue(maxsize=2)
     
     # Test put_nowait
     small_queue.put_nowait("item1")

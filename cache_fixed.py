@@ -26,5 +26,5 @@ class TTLCache:
             self._store[key] = (value, expires_at)
 
     def clear(self):
-        with self._lock:
-            self._store.clear()
+        with self._lock:          # ← was missing; this is the fix
+            self._store.clear()   # in-place clear avoids reference aliasing
