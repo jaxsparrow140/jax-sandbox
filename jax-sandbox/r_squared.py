@@ -1,66 +1,54 @@
-def calculate_r_squared(actual, predicted):
-    """
-    Calculate the R-squared (coefficient of determination) value.
-    
+"""Pure-Python R-squared calculation — no external libraries."""
+
+
+def r_squared(actual: list[float], predicted: list[float]) -> float:
+    """Return the coefficient of determination (R²) for actual vs predicted values.
+
+    R² = 1 - SS_res / SS_tot
+
+    where
+        SS_res = Σ(actual_i - predicted_i)²   (residual sum of squares)
+        SS_tot = Σ(actual_i - mean(actual))²   (total sum of squares)
+
     Args:
-        actual: List of actual values
-        predicted: List of predicted values
-    
+        actual:    List of observed values.
+        predicted: List of predicted values (same length as actual).
+
     Returns:
-        R-squared value (float)
-    
-    R-squared = 1 - (SS_res / SS_tot)
-    where:
-        SS_res = sum of squared residuals = sum((actual - predicted)^2)
-        SS_tot = total sum of squares = sum((actual - mean(actual))^2)
+        R² as a float.  1.0 = perfect fit, 0.0 = no better than the mean,
+        negative = worse than the mean.
+
+    Raises:
+        ValueError: If the lists are empty or differ in length.
+        ZeroDivisionError: If all actual values are identical (SS_tot == 0).
     """
-    # Check that lists have the same length
     if len(actual) != len(predicted):
-        raise ValueError("Actual and predicted lists must have the same length")
-    
-    if len(actual) == 0:
-        raise ValueError("Lists cannot be empty")
-    
-    # Calculate the mean of actual values
+        raise ValueError(
+            f"Length mismatch: actual has {len(actual)} elements, "
+            f"predicted has {len(predicted)}"
+        )
+    if not actual:
+        raise ValueError("Lists must not be empty")
+
     mean_actual = sum(actual) / len(actual)
-    
-    # Calculate SS_res (sum of squared residuals)
+
     ss_res = sum((a - p) ** 2 for a, p in zip(actual, predicted))
-    
-    # Calculate SS_tot (total sum of squares)
     ss_tot = sum((a - mean_actual) ** 2 for a in actual)
-    
-    # Handle edge case where all actual values are the same
+
     if ss_tot == 0:
-        if ss_res == 0:
-            return 1.0  # Perfect prediction
-        else:
-            return 0.0  # Can't explain any variance
-    
-    # Calculate R-squared
-    r_squared = 1 - (ss_res / ss_tot)
-    
-    return r_squared
+        raise ZeroDivisionError(
+            "R² is undefined when all actual values are identical (SS_tot = 0)"
+        )
+
+    return 1 - ss_res / ss_tot
 
 
-# Example usage and test
+# ── quick demo ──────────────────────────────────────────────
 if __name__ == "__main__":
-    # Test case 1: Perfect prediction
-    actual1 = [1, 2, 3, 4, 5]
-    predicted1 = [1, 2, 3, 4, 5]
-    print(f"Perfect prediction: {calculate_r_squared(actual1, predicted1)}")
-    
-    # Test case 2: Good prediction
-    actual2 = [1, 2, 3, 4, 5]
-    predicted2 = [1.1, 2.1, 2.9, 4.2, 4.8]
-    print(f"Good prediction: {calculate_r_squared(actual2, predicted2)}")
-    
-    # Test case 3: Poor prediction
-    actual3 = [1, 2, 3, 4, 5]
-    predicted3 = [5, 4, 3, 2, 1]
-    print(f"Poor prediction: {calculate_r_squared(actual3, predicted3)}")
-    
-    # Test case 4: All same values
-    actual4 = [3, 3, 3, 3, 3]
-    predicted4 = [3, 3, 3, 3, 3]
-    print(f"All same values: {calculate_r_squared(actual4, predicted4)}")
+    y      = [3, -0.5, 2, 7]
+    y_hat  = [2.5, 0.0, 2, 8]
+
+    score = r_squared(y, y_hat)
+    print(f"Actual:    {y}")
+    print(f"Predicted: {y_hat}")
+    print(f"R²:        {score:.6f}")
