@@ -1,90 +1,50 @@
-"""rate_limiter.py
-
-Sliding Window Log rate limiter.
-
-Algorithm (sliding window log):
-- Keep a log of timestamps for *accepted* requests.
-- Before each decision, prune timestamps older than the window.
-- Allow if the remaining count is < N.
-
-This implementation is safe under bursts (many requests at the same timestamp)
-and is testable without sleeping by passing an explicit `now`.
-"""
-
-from __future__ import annotations
-
-import threading
 import time
-from collections import deque
-from typing import Callable, Deque, Optional
+import threading
+from collections import defaultdict
 
 
-class SlidingWindowLogRateLimiter:
-    """Allow at most `max_requests` per `window_seconds` using a sliding window log."""
+class SlidingWindowRateLimiter:
+    """Thread-safe sliding window rate limiter."""
 
-    def __init__(
-        self,
-        max_requests: int,
-        window_seconds: float,
-        *,
-        time_func: Optional[Callable[[], float]] = None,
-    ) -> None:
-        if max_requests <= 0:
-            raise ValueError("max_requests must be > 0")
-        if window_seconds <= 0:
-            raise ValueError("window_seconds must be > 0")
-
-        self.max_requests = int(max_requests)
-        self.window_seconds = float(window_seconds)
-        self._time = time_func or time.monotonic
-
-        self._log: Deque[float] = deque()
+    def __init__(self, max_requests: int, window_seconds: float):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._requests = defaultdict(list)  # client_id -> [timestamps]
         self._lock = threading.Lock()
 
-    def _prune(self, now: float) -> None:
-        cutoff = now - self.window_seconds
-        while self._log and self._log[0] <= cutoff:
-            self._log.popleft()
+    def _cleanup_old_requests(self, client_id: str):
+        """Remove timestamps outside the current window.
 
-    def allow_request(self, now: Optional[float] = None) -> bool:
-        """Return True if the request is allowed; otherwise False.
-
-        Parameters
-        ----------
-        now:
-            Timestamp (seconds) to use for the decision. If omitted, uses the
-            injected `time_func` (defaults to `time.monotonic`).
+        Must be called with self._lock already held.
         """
-        if now is None:
-            now = self._time()
+        cutoff = time.time() - self.window_seconds
+        self._requests[client_id] = [
+            ts for ts in self._requests[client_id] if ts > cutoff
+        ]
 
+    def is_allowed(self, client_id: str) -> bool:
+        """Check if a request is allowed and record it if so.
+
+        The check and the append are performed atomically under the lock,
+        eliminating the TOCTOU race where multiple threads could each observe
+        count < max_requests and all append before any of them incremented the
+        shared count.
+        """
         with self._lock:
-            self._prune(now)
-            if len(self._log) < self.max_requests:
-                self._log.append(now)
+            self._cleanup_old_requests(client_id)
+            current_count = len(self._requests[client_id])
+            if current_count < self.max_requests:
+                self._requests[client_id].append(time.time())
                 return True
             return False
 
-    def current_count(self, now: Optional[float] = None) -> int:
-        """Number of accepted requests currently in the window."""
-        if now is None:
-            now = self._time()
-
+    def get_remaining(self, client_id: str) -> int:
+        """Return number of requests remaining in current window."""
         with self._lock:
-            self._prune(now)
-            return len(self._log)
+            self._cleanup_old_requests(client_id)
+            return self.max_requests - len(self._requests[client_id])
 
-    def reset(self) -> None:
-        """Clear all recorded timestamps."""
+    def reset(self, client_id: str):
+        """Reset rate limit for a specific client."""
         with self._lock:
-            self._log.clear()
-
-    def __repr__(self) -> str:  # pragma: no cover
-        return (
-            f"{self.__class__.__name__}(max_requests={self.max_requests}, "
-            f"window_seconds={self.window_seconds})"
-        )
-
-
-class RateLimiter(SlidingWindowLogRateLimiter):
-    """Backward-compatible alias for `SlidingWindowLogRateLimiter`."""
+            self._requests[client_id] = []
